@@ -2216,7 +2216,6 @@
         "pkceEnabled": "true",
         "authorizationUrl": "https://login.microsoftonline.com/9f1a1bc4-e5b7-4144-99b3-1f692eae04fd/oauth2/v2.0/authorize",
         "disableUserInfo": "true",
-        "logoutUrl": "https://login.microsoftonline.com/9f1a1bc4-e5b7-4144-99b3-1f692eae04fd/oauth2/v2.0/logout",
         "sendIdTokenOnLogout": "true",
         "passMaxAge": "false",
         "disableTypeClaimCheck": "false"

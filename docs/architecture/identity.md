@@ -27,6 +27,7 @@ One realm per customer organisation; each organisation gets its own cluster. Tar
 | Entra app | "Scribe Calendar Watcher", `7b315648-cdc2-432c-93e8-2881346f886d` (reused from Scribe; multi-tenant, but the tenant-specific URLs limit sign-in to Taraz) |
 | Client secret | `${KC_ENTRA_CLIENT_SECRET}`. Keycloak gets its own secret; Scribe keeps a separate one |
 | Scopes | `openid profile email`, with PKCE (S256). Claims are read from the ID token (no userinfo call) |
+| Logout URL | **None, on purpose.** Signing out of an app ends the Keycloak session, not the person's Microsoft session (which Outlook and Teams also use). With Microsoft's logout URL set, Keycloak sent the browser to Microsoft on sign-out and waited for it to come back; Microsoft never did (Keycloak's return address isn't registered), so the Keycloak session stayed alive and the next sign-in went straight in. Found on Scribe staging and removed 2026-10-21 |
 | Groups claim | Switched on for the Entra app, but **no longer used** (since 2026-10-21 admins are decided in the admin portal, not by Entra groups) |
 | Redirect URIs to register on the Entra app (Web platform) | local `http://localhost:8080/realms/taraz/broker/entra/endpoint` (done) · staging `https://auth.<staging-domain>/realms/taraz/broker/entra/endpoint` · production `https://auth.<domain>/realms/taraz/broker/entra/endpoint` |
 
