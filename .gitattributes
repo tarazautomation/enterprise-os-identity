@@ -1,0 +1,3 @@
+# Keep Linux line endings everywhere: shell scripts and YAML break with CRLF inside WSL and containers.
+* text=auto eol=lf
+*.whl binary
