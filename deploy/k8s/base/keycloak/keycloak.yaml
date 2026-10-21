@@ -1,0 +1,27 @@
+# Keycloak for Enterprise OS (P2.1), managed by the Keycloak Operator.
+# Same on every cluster; each cluster's overlay sets only the hostname and the database host.
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: identity
+spec:
+  instances: 2                      # two copies: one can fail without anyone noticing
+  db:
+    vendor: postgres
+    host: SET-PER-CLUSTER           # local: in-cluster Postgres; staging/production: RDS endpoint
+    port: 5432
+    database: keycloak
+    usernameSecret: { name: keycloak-db, key: username }
+    passwordSecret: { name: keycloak-db, key: password }
+  hostname:
+    hostname: https://auth.example.invalid   # SET-PER-CLUSTER, e.g. https://auth.<domain>
+  proxy:
+    headers: xforwarded             # TLS ends at the gateway (Istio on EKS, Traefik locally)
+  http:
+    httpEnabled: true
+  ingress:
+    enabled: false                  # traffic arrives through the cluster's gateway, not an operator-made Ingress
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { memory: 1536Mi }

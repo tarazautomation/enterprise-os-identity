@@ -1,0 +1,7 @@
+# Namespace for Keycloak (P2.1). Same on every cluster: local, staging, production.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: identity
+  labels:
+    app.kubernetes.io/part-of: enterprise-os

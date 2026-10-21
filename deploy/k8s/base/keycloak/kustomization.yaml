@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: identity
+resources:
+  - keycloak.yaml
+  # Generated from keycloak/realm-taraz.json by tools/make-realm-import.py.
+  # Needs Secret keycloak-realm-secrets (one key per ${KC_*} placeholder) before it runs.
+  - realm-import.json

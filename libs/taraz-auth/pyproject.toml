@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taraz-auth"
+version = "1.0.0"
+description = "Shared sign-in checks for Enterprise OS services: verify Keycloak tokens, read tenant and roles, call other services with a service token."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Taraz Technologies" }]
+dependencies = [
+  "PyJWT[crypto]>=2.8,<3",
+  "httpx>=0.27,<1",
+]
+
+[project.optional-dependencies]
+fastapi = ["fastapi>=0.110"]
+test = ["pytest>=8", "fastapi>=0.110"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taraz_auth"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: needs a running Keycloak (set TARAZ_AUTH_LIVE_ISSUER)"]

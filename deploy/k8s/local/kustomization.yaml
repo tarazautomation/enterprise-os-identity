@@ -1,0 +1,20 @@
+# Local k3d cluster "taraz-local": Keycloak at http://localhost:8080 with in-cluster Postgres.
+#   kubectl apply -k local     (after: kubectl apply --server-side -k base/operator)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: identity
+
+resources:
+  - ../base/keycloak
+  - postgres.yaml
+  - ingress.yaml
+
+patches:
+  - target: { kind: Keycloak, name: keycloak }
+    patch: |-
+      - op: replace
+        path: /spec/hostname/hostname
+        value: http://localhost:8080
+      - op: replace
+        path: /spec/db/host
+        value: keycloak-db
