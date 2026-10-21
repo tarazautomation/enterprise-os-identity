@@ -20,3 +20,4 @@ local-keycloak-test-users.txt
 .idea/
 .DS_Store
 Thumbs.db
+*-secret.txt

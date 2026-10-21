@@ -27,7 +27,7 @@ One realm per customer organisation; each organisation gets its own cluster. Tar
 | Entra app | "Scribe Calendar Watcher", `7b315648-cdc2-432c-93e8-2881346f886d` (reused from Scribe; multi-tenant, but the tenant-specific URLs limit sign-in to Taraz) |
 | Client secret | `${KC_ENTRA_CLIENT_SECRET}`. Keycloak gets its own secret; Scribe keeps a separate one |
 | Scopes | `openid profile email`, with PKCE (S256). Claims are read from the ID token (no userinfo call) |
-| Groups claim | Switched on for the Entra app (Token configuration → groups: Security groups, ID/Access/SAML), so the ID token lists the user's group IDs |
+| Groups claim | Switched on for the Entra app, but **no longer used** (since 2026-10-21 admins are decided in the admin portal, not by Entra groups) |
 | Redirect URIs to register on the Entra app (Web platform) | local `http://localhost:8080/realms/taraz/broker/entra/endpoint` (done) · staging `https://auth.<staging-domain>/realms/taraz/broker/entra/endpoint` · production `https://auth.<domain>/realms/taraz/broker/entra/endpoint` |
 
 Provider mappers, applied on every sign-in:
@@ -37,7 +37,6 @@ Provider mappers, applied on every sign-in:
 | Hardcoded attribute | `tenant_id = taraz` |
 | Claim `oid` → attribute `entra_oid` | The Microsoft user ID. Scribe matches its existing users on it (P2.7) |
 | Claim `tid` → attribute `entra_tid` | The Microsoft tenant ID |
-| Claim `groups` contains `9c6268ca-c43d-45f2-aaee-f93be7bc8ad2` → role `admin` | Members of the Entra security group "Enterprise OS Admins" become `admin`. Re-checked on every sign-in, so removing someone from the group removes their admin role |
 
 `tenant_id`, `entra_oid` and `entra_tid` are declared in the realm's user profile (admin view and edit only). Keycloak 24+ drops undeclared attributes.
 
@@ -46,8 +45,8 @@ Provider mappers, applied on every sign-in:
 | Role | Who | How it's given |
 |---|---|---|
 | `employee` | Every staff member | Default role: everyone gets it on first sign-in |
-| `process_owner` | Approves the ontology and processes for their area | Assigned per person (later: from an Entra group) |
-| `admin` | Runs Enterprise OS for the company | From membership of the Entra group "Enterprise OS Admins" (see the mappers above) |
+| `process_owner` | Approves the ontology and processes for their area | Given and removed by an admin in the admin portal (tenant service, P2.2) |
+| `admin` | Runs Enterprise OS for the company | Given and removed by an admin in the admin portal (tenant service, P2.2), which writes it to Keycloak. The tenant service won't remove the last admin. On a brand-new realm, the first admin is assigned by hand in the Keycloak admin console |
 | `agent` | An AI agent (e.g. Claude) acting for one person, with only that person's access | Given to agent sessions through the `external-agents` client (P2.5) |
 
 ### One-time code for admins
@@ -65,7 +64,7 @@ Allow access           REQUIRED
 - **Everyone else** passes straight through.
 - The final "Allow access" step is required. Without it, a flow where every step is skipped counts as a failed sign-in, and non-admins see "Invalid username or password".
 
-Tested on 2026-10-19: a member of the group got `admin` and had to set up and enter a code.
+Tested on 2026-10-19: an admin had to set up and enter a code. (Admin then came from the Entra group; since 2026-10-21 it is given in the admin portal. The one-time code applies to anyone holding `admin`, however they got it.)
 
 ### Apps (clients)
 
@@ -76,7 +75,7 @@ Tested on 2026-10-19: a member of the group got `admin` and had to set up and en
 | `external-agents` | Public, PKCE, **consent required** | Claude and other agents; redirects to `claude.ai` / `claude.com` `/api/mcp/auth_callback` |
 | `scribe` | Confidential, sign-in + service account | Scribe web and workers |
 | `knowledge-base` | Confidential, sign-in + service account | KB ingestion and console |
-| `lectra`, `mcp-server`, `tenant-service`, `storage-service`, `audit-log` | Confidential, service account only | Backend services calling each other |
+| `lectra`, `mcp-server`, `tenant-service`, `storage-service`, `audit-log` | Confidential, service account only | Backend services calling each other. `tenant-service`'s service account may also view and manage users and read realm roles (realm-management: view-users, query-users, manage-users, view-realm), so the admin portal can change roles |
 
 More backend services are added as the service catalogue (P0.2) settles. The local redirect URIs (`localhost:3000`, `:5173`, `:8000`) are placeholders until each app's staging and production addresses exist.
 
@@ -134,7 +133,7 @@ What every service checks (the P2.3 auth library does this):
 
 ## Still to do for P0.4 and P2.1
 
-- [x] `admin` from the Entra group "Enterprise OS Admins" (done 2026-10-19).
+- [x] `admin` decided in the admin portal, not by Entra groups (changed 2026-10-21; the group rule was removed).
 - [x] A one-time code for admins (done 2026-10-19).
 - [ ] Replace the Entra secret that was exposed in chat: new secrets for Keycloak and Scribe, then delete the old `y3Q…` one.
 - [ ] Linking Keycloak users to Odoo users, so Claude acting in Odoo is the real person (P2.5, with Subhan's MCP server).

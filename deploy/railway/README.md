@@ -42,3 +42,10 @@ Only the master-realm admin `junaid.asrar`, with a password and authenticator ap
 1. Copy the Postgres database to the new home: same Keycloak version, so IDs are kept.
 2. Change `KC_HOSTNAME` (or point DNS at the new home), and add the new redirect URI on the Entra app.
 3. Update each app's `TARAZ_AUTH_ISSUER` if the address changed. Everyone signs in once more.
+
+## One-off admin changes: `admin-setup.py`
+
+An admin runs `python deploy/railway/admin-setup.py` on their own PC. It asks for the admin-console username, password and authenticator code (hidden, never saved), then:
+1. removes the "Enterprise OS Admins group -> admin" rule (since 2026-10-21 the admin portal decides who is admin)
+2. gives `tenant-service`'s service account view-users, query-users, manage-users and view-realm in realm `taraz`
+3. issues a new `tenant-service` client secret and saves it to `tenant-service-secret.txt` for the Railway variable. Set `SECRET_OUT_DIR` to keep it outside the repo, and delete it afterwards.

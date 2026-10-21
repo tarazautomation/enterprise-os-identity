@@ -2221,18 +2221,6 @@
         "claim": "tid",
         "user.attribute": "entra_tid"
       }
-    },
-    {
-      "id": "e12162aa-ecaa-4455-bd07-ea6f1cb51a42",
-      "name": "Enterprise OS Admins group -> admin",
-      "identityProviderAlias": "entra",
-      "identityProviderMapper": "oidc-role-idp-mapper",
-      "config": {
-        "syncMode": "FORCE",
-        "claim": "groups",
-        "role": "admin",
-        "claim.value": "9c6268ca-c43d-45f2-aaee-f93be7bc8ad2"
-      }
     }
   ],
   "components": {
@@ -3284,5 +3272,23 @@
   },
   "clientPolicies": {
     "policies": []
-  }
+  },
+  "users": [
+    {
+      "username": "service-account-tenant-service",
+      "enabled": true,
+      "serviceAccountClientId": "tenant-service",
+      "realmRoles": [
+        "default-roles-taraz"
+      ],
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm"
+        ]
+      }
+    }
+  ]
 }
