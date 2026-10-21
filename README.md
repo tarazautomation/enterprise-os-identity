@@ -10,7 +10,7 @@ Owner: Junaid (lane: identity, Scribe, Lectra, app shell). This repo moves into 
 | `deploy/k8s/` | Keycloak on Kubernetes (operator, 2 instances, Postgres, realm import), proven on a local k3d cluster. See its README for what changes on EKS | P2.1 |
 | `deploy/railway/` | How the interim Railway deployment is set up (until EKS exists) | P2.1 (interim) |
 | `libs/taraz-auth/` | The shared Python library every service uses to check tokens, read tenant and roles, and call other services | P2.3 |
-| `services/tenant-service/` | The member directory and admin-portal back end (coming next) | P2.2 |
+| `services/tenant-service/` | The member directory and admin-portal back end: members, roles, app access, agents, invites, synced with Keycloak | P2.2 |
 
 ## Where it runs today
 
