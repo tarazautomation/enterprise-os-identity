@@ -1203,7 +1203,8 @@
             "profile",
             "basic",
             "tenant",
-            "email"
+            "email",
+            "entra"
           ],
           "optionalClientScopes": [
             "address",
@@ -2148,6 +2149,47 @@
                 "access.token.claim": "true",
                 "claim.name": "client_id",
                 "jsonType.label": "String"
+              }
+            }
+          ]
+        },
+        {
+          "name": "entra",
+          "protocol": "openid-connect",
+          "description": "Adds the Microsoft user ID (entra_oid) and Microsoft tenant ID (entra_tid). For apps that match people with their Microsoft account, like Scribe.",
+          "attributes": {
+            "include.in.token.scope": "false",
+            "display.on.consent.screen": "false"
+          },
+          "protocolMappers": [
+            {
+              "name": "entra_oid",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "user.attribute": "entra_oid",
+                "claim.name": "entra_oid",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "introspection.token.claim": "true"
+              }
+            },
+            {
+              "name": "entra_tid",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "user.attribute": "entra_tid",
+                "claim.name": "entra_tid",
+                "jsonType.label": "String",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "introspection.token.claim": "true"
               }
             }
           ]

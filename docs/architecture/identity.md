@@ -71,13 +71,15 @@ Tested on 2026-10-19: an admin had to set up and enter a code. (Admin then came 
 | Client | Type | Used by |
 |---|---|---|
 | `app-shell` | Public, PKCE | The Flutter web app shell (P6.1) |
-| `scribe-desktop` | Public, PKCE, loopback redirect `http://127.0.0.1/*` | The Scribe Windows app |
+| `scribe-desktop` | Public, PKCE, loopback redirect `http://127.0.0.1/*` | Reserved for the Scribe Windows app. **Not used yet:** the app signs in through Scribe's server (`scribe`), which keeps the installed app working with no update (see P2.7 below) |
 | `external-agents` | Public, PKCE, **consent required** | Claude and other agents; redirects to `claude.ai` / `claude.com` `/api/mcp/auth_callback` |
 | `scribe` | Confidential, sign-in + service account | Scribe web and workers |
 | `knowledge-base` | Confidential, sign-in + service account | KB ingestion and console |
 | `lectra`, `mcp-server`, `tenant-service`, `storage-service`, `audit-log` | Confidential, service account only | Backend services calling each other. `tenant-service`'s service account may also view and manage users and read realm roles (realm-management: view-users, query-users, manage-users, view-realm), so the admin portal can change roles |
 
 More backend services are added as the service catalogue (P0.2) settles. The local redirect URIs (`localhost:3000`, `:5173`, `:8000`) are placeholders until each app's staging and production addresses exist.
+
+The client scope `entra` adds the Microsoft user ID (`entra_oid`) and tenant ID (`entra_tid`) to ID and access tokens. Only `scribe` includes it (added 2026-10-21), because Scribe matches its existing users on the Microsoft ID; add it to any other app that needs to know a person's Microsoft account.
 
 Every client includes the shared client scope `tenant` (realm default), which writes `tenant_id` into ID and access tokens. The value is fixed per realm (`taraz`), because one realm is one tenant. Service-account tokens (service-to-service calls) therefore carry it too; a mapper reading a user attribute missed them. Changed 2026-10-19 for P2.3. The `tenant_id` user attribute is still stored on sign-in, for reference.
 
@@ -127,9 +129,9 @@ What every service checks (the P2.3 auth library does this):
 | Knowledge base (`tarazautomation/Knowledge-Base`) | Local username and password, custom HMAC tokens (`server/auth.py`); roles admin/user; API keys with reader/ingest/service roles | SQLite on the service's `/data` volume | Replace login and token issuing with the auth library. Map Keycloak roles and groups to the KB's access tags (row-level security, `docs/architecture/06-identity-and-acl.md`): admin → admin, employee → user. API keys become service accounts |
 | KB retrieval (`tarazautomation/Knowledge-Base-Retrieval`) | No users of its own: checks a shared token and asks the KB about the caller on every request (`server/auth.py`, `server/scope.py`) | None | Check the Keycloak token locally instead of calling the KB |
 | MCP server (inside Knowledge-Base, `server/mcp_remote.py`) | Custom 90-day tokens, some passed in the URL path | KB's SQLite | Keycloak OAuth through `external-agents`. The KB's existing `agent` principal kind maps to the `agent` role |
-| Scribe (`Taraz-Technologies/scribe`) | Microsoft via MSAL (`saas/web/microsoft.py`, `/auth/microsoft/login` and `/callback` in `saas/web/app.py`), cookie session; admin = `ADMIN_EMAILS` | Postgres `users`, keyed by Microsoft `oid` and email; company = Entra `tid` | Replace the MSAL login and session with Keycloak via `scribe`. Match users on `entra_oid`; `entra_tid` becomes the company; `ADMIN_EMAILS` become the `admin` role. **Keep** the separate calendar consent (`Calendars.Read`) the scanner needs |
+| Scribe (`Taraz-Technologies/scribe`) | Microsoft via MSAL (`saas/web/microsoft.py`, `/auth/microsoft/login` and `/callback` in `saas/web/app.py`), cookie session; operator access = `ADMIN_EMAILS` | Postgres `users`, keyed by Microsoft `oid` and email; company = Entra `tid` | **Done on branch `keycloak-sign-in` (2026-10-21), behind the switch `SIGN_IN=keycloak`.** Keycloak signs people in through `scribe` (`saas/web/keycloak.py`); users are matched on `entra_oid` (scope `entra`), then email; `entra_tid` is the company. Scribe's own cookie session stays. **Calendar access is a separate step:** the old Microsoft flow becomes "Connect Microsoft calendar" (already in onboarding), which refuses a different Microsoft account than the one signed in. **`ADMIN_EMAILS` stays as it is:** it opens every company's recordings, so it is a platform operator, not the company `admin` role (decided 2026-10-21). **Taraz accounts only** until V2 adds other companies (no one outside Taraz uses Scribe yet) |
 | Lectra (`scribe` repo, `lectra/`) | Static `LECTRA_API_TOKEN` or an Entra JWT with a hard-coded tenant, client and domain (`lectra/service/auth.py`); usually reached through Scribe's proxy | `usage.json` keyed by email | Replace `lectra/service/auth.py` with the auth library and use the `lectra` service account. Set `LECTRA_REQUIRE_AUTH=1` on EKS |
-| Scribe desktop (`tarazautomation/scribe-desktop`, not in the V1 plan) | Browser PKCE hand-off to Scribe web, which issues a device token (`saas/web/auth_desktop.py`, `devices.py`) | Scribe's Postgres | Sign in with Keycloak through `scribe-desktop`. Ship a release with the new URLs before Railway is switched off |
+| Scribe desktop (`tarazautomation/scribe-desktop`, not in the V1 plan) | Browser PKCE hand-off to Scribe web, which issues a device token (`saas/web/auth_desktop.py`, `devices.py`) | Scribe's Postgres | **No change to the app.** It only talks to Scribe's server (`/auth/desktop/start`, `/api/desktop/token`); with `SIGN_IN=keycloak` that server signs the person in through Keycloak and hands back the same device token. A new person who signs in from the app first connects their calendar on the website |
 
 ## Still to do for P0.4 and P2.1
 
@@ -139,3 +141,4 @@ What every service checks (the P2.3 auth library does this):
 - [ ] Linking Keycloak users to Odoo users, so Claude acting in Odoo is the real person (P2.5, with Subhan's MCP server).
 - [ ] The audience decision for P2.3 (above).
 - [ ] Add staging and production redirect URIs to the Entra app and to each client once the domains exist (P2.1).
+- [ ] Sending people straight to Microsoft (the Identity Provider Redirector's default provider `entra`) is set by hand on Railway but not in `realm-taraz.json`, so a fresh import shows Keycloak's own sign-in form first. Decide whether the file should set it too; locally, that form is how the test users sign in.

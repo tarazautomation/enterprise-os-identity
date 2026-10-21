@@ -63,3 +63,18 @@ Service `tenant-service` in the same project, built from this repo (`services/te
 | Variables | `RAILWAY_DOCKERFILE_PATH`, `DATABASE_URL` (reference to `Postgres-XjsC`), `TARAZ_AUTH_ISSUER`, `TARAZ_AUTH_TENANT_ID`, `TENANT_NAME`, `TARAZ_AUTH_CLIENT_ID` (`tenant-service`), `TARAZ_AUTH_CLIENT_SECRET` (issued by `admin-setup.py`), `SYNC_INTERVAL_SECONDS`, `PORT` |
 
 First deploy (2026-10-21): the migration ran, and the first sync found 1 user.
+
+## Scribe's Keycloak sign-in (P2.7)
+
+Before Scribe staging or production is switched to `SIGN_IN=keycloak`, an admin runs `deploy/railway/scribe-setup.py` once on their own PC (it asks for the admin password and one-time code). It adds the `entra` client scope (Microsoft user ID and tenant ID in Scribe's tokens) and writes a fresh `scribe` client secret to `scribe-secret.txt`.
+
+Scribe's variables (project "Scribe Minio", service `scribe`; staging deploys from branch `staging`, production from `main`):
+
+| Variable | Value |
+|---|---|
+| `SIGN_IN` | `keycloak` (remove it, or set `microsoft`, to go back to the old sign-in) |
+| `TARAZ_AUTH_ISSUER` | `https://taraz-auth.up.railway.app/realms/taraz` |
+| `TARAZ_AUTH_CLIENT_ID` | `scribe` (the default) |
+| `TARAZ_AUTH_CLIENT_SECRET` | from `scribe-secret.txt` |
+
+The Keycloak `scribe` client already allows `https://scribe-staging.up.railway.app/*` and `https://web-production-ca083.up.railway.app/*` as return addresses.
