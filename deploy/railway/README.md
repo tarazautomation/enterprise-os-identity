@@ -49,3 +49,17 @@ An admin runs `python deploy/railway/admin-setup.py` on their own PC. It asks fo
 1. removes the "Enterprise OS Admins group -> admin" rule (since 2026-10-21 the admin portal decides who is admin)
 2. gives `tenant-service`'s service account view-users, query-users, manage-users and view-realm in realm `taraz`
 3. issues a new `tenant-service` client secret and saves it to `tenant-service-secret.txt` for the Railway variable. Set `SECRET_OUT_DIR` to keep it outside the repo, and delete it afterwards.
+
+## Tenant service (P2.2)
+
+Service `tenant-service` in the same project, built from this repo (`services/tenant-service/Dockerfile`, build context = repo root), with its own database `Postgres-XjsC` (database `tenants`).
+
+| Setting | Value |
+|---|---|
+| Address | https://taraz-tenants.up.railway.app (API description at `/openapi.json`) |
+| Pre-deploy command | `alembic upgrade head` (migrations run before each deploy, not at start-up) |
+| Healthcheck | `/healthz` |
+| Watch paths | `services/tenant-service/**`, `libs/taraz-auth/**` |
+| Variables | `RAILWAY_DOCKERFILE_PATH`, `DATABASE_URL` (reference to `Postgres-XjsC`), `TARAZ_AUTH_ISSUER`, `TARAZ_AUTH_TENANT_ID`, `TENANT_NAME`, `TARAZ_AUTH_CLIENT_ID` (`tenant-service`), `TARAZ_AUTH_CLIENT_SECRET` (issued by `admin-setup.py`), `SYNC_INTERVAL_SECONDS`, `PORT` |
+
+First deploy (2026-10-21): the migration ran, and the first sync found 1 user.
