@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from taraz_auth import Principal
@@ -34,8 +34,7 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
 
     # --- who may call ---
 
-    async def reader(request: Request) -> Principal:
-        p = await auth.principal(request)
+    async def reader(p: Principal = Depends(auth.principal)) -> Principal:   # Depends, so OpenAPI shows bearerAuth
         if p.is_service_account or p.has_role("employee") or p.has_role("admin"):
             return p
         raise HTTPException(403, {"error": "insufficient_role", "message": "only members of this company and services"})

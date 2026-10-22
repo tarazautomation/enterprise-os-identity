@@ -24,7 +24,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/members": {
@@ -34,6 +39,11 @@
         ],
         "summary": "Search the member directory",
         "operationId": "members_v1_members_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "q",
@@ -151,6 +161,11 @@
         ],
         "summary": "Member",
         "operationId": "member_v1_members__member_id__get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "member_id",
@@ -208,7 +223,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/apps": {
@@ -233,7 +253,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/tenant": {
@@ -254,7 +279,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/members/{member_id}/roles": {
@@ -264,6 +294,11 @@
         ],
         "summary": "Set a member's editable roles (admin, process_owner)",
         "operationId": "put_roles_v1_members__member_id__roles_put",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "member_id",
@@ -316,6 +351,11 @@
         ],
         "summary": "Set the apps a member may use",
         "operationId": "put_apps_v1_members__member_id__apps_put",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "member_id",
@@ -368,6 +408,11 @@
         ],
         "summary": "Stop a member signing in (and end their sessions)",
         "operationId": "disable_v1_members__member_id__disable_post",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "member_id",
@@ -410,6 +455,11 @@
         ],
         "summary": "Enable",
         "operationId": "enable_v1_members__member_id__enable_post",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "member_id",
@@ -452,6 +502,11 @@
         ],
         "summary": "A member's change history",
         "operationId": "events_v1_members__member_id__events_get",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "member_id",
@@ -513,7 +568,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -552,7 +612,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/invites/{invite_id}": {
@@ -562,6 +627,11 @@
         ],
         "summary": "Revoke an invite",
         "operationId": "revoke_invite_v1_invites__invite_id__delete",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "invite_id",
@@ -619,7 +689,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/status": {
@@ -640,7 +715,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/sync": {
@@ -661,7 +741,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
@@ -1185,6 +1270,13 @@
           "type"
         ],
         "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
     }
   }
