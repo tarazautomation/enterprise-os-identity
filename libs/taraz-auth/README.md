@@ -63,6 +63,8 @@ What callers get back when something's wrong:
 
 401 answers include `WWW-Authenticate: Bearer error="..."`. The caller is also available as `request.state.principal` (useful for the audit log, P2.8).
 
+Routes that use these dependencies declare the `bearerAuth` scheme (HTTP bearer, JWT) in their OpenAPI description, so Swagger shows an Authorize button. In a dependency of your own, take the caller with `Depends(auth.principal)` rather than calling `auth.principal(request)`, or its routes won't declare it.
+
 ## Use it without FastAPI
 
 ```python
