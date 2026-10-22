@@ -23,7 +23,7 @@ class KeycloakAdmin:
 
     @classmethod
     def from_settings(cls, settings) -> "KeycloakAdmin":
-        tokens = ServiceTokenProvider.from_issuer(settings.issuer, settings.client_id, settings.client_secret)
+        tokens = ServiceTokenProvider(settings.token_endpoint, settings.client_id, settings.client_secret)
         return cls(settings.keycloak_base, settings.realm, httpx.Client(auth=tokens.httpx_auth(), timeout=15))
 
     def _call(self, method: str, path: str, **kw) -> Any:
