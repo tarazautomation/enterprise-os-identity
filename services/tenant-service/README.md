@@ -43,12 +43,14 @@ Answers to bad requests: 401 (no, invalid, expired or wrong-tenant token), 403 (
 | `DATABASE_URL` | Postgres URL (`postgresql://…` is fine) |
 | `SYNC_INTERVAL_SECONDS` | `30` |
 | `TARAZ_AUTH_JWKS_URL` | optional internal address of Keycloak's public keys |
+| `KEYCLOAK_INTERNAL_URL` | optional: `http://keycloak-service.identity.svc.cluster.local:8080`, the base URL for admin API and token calls when the issuer's address doesn't work from inside the service (in a pod, `localhost` is the pod). Defaults to the issuer's base. The issuer stays the public value that tokens are checked against |
+| `TARAZ_AUTH_TOKEN_URL` | optional: where this service gets its own token. Defaults to `<KEYCLOAK_INTERNAL_URL or issuer base>/realms/<realm>/protocol/openid-connect/token` |
 
 ## Run, test, migrate
 
 ```bash
 pip install -e ../../libs/taraz-auth[fastapi] -e ".[test]"
-pytest                                  # 16 tests, no network
+pytest                                  # 19 tests, no network
 alembic upgrade head                    # needs DATABASE_URL
 uvicorn tenant_service.main:app --port 8090
 python -m tenant_service.export_openapi openapi.json
