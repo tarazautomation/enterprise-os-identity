@@ -14,16 +14,24 @@
 Errors become HTTP answers: 401 for no, invalid, expired or wrong-tenant tokens (with a
 WWW-Authenticate header), 403 for a missing role, 503 if Keycloak's keys can't be fetched.
 The caller is also put on request.state.principal, e.g. for the audit log.
+
+Routes that use these dependencies declare the bearerAuth scheme (HTTP bearer, JWT) in OpenAPI,
+so Swagger shows an Authorize button. A service's own dependency should take the caller with
+Depends(auth.principal) rather than calling auth.principal(request), or its routes won't declare it.
 """
 
 from typing import Callable
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.concurrency import run_in_threadpool
 
 from .errors import AuthError, MissingToken
 from .principal import Principal
 from .verifier import TokenVerifier
+
+# Only tells OpenAPI how to send the token. auto_error=False: our own checks below answer every failure.
+_bearer = HTTPBearer(scheme_name="bearerAuth", bearerFormat="JWT", auto_error=False)
 
 
 def _http_error(err: AuthError) -> HTTPException:
@@ -35,7 +43,10 @@ class FastAPIAuth:
     def __init__(self, verifier: TokenVerifier):
         self.verifier = verifier
 
-    async def principal(self, request: Request) -> Principal:
+    async def principal(
+        self, request: Request, _credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)
+    ) -> Principal:
+        # The header is read here, not from _credentials, so principal(request) can still be called directly
         header = request.headers.get("authorization", "")
         scheme, _, token = header.partition(" ")
         try:
@@ -50,8 +61,7 @@ class FastAPIAuth:
 
     def require(self, *roles: str) -> Callable:
         """Dependency: the caller must have every one of these roles."""
-        async def dependency(request: Request) -> Principal:
-            p = await self.principal(request)
+        async def dependency(p: Principal = Depends(self.principal)) -> Principal:
             try:
                 return p.require_roles(*roles)
             except AuthError as e:
@@ -60,8 +70,7 @@ class FastAPIAuth:
 
     def require_any(self, *roles: str) -> Callable:
         """Dependency: the caller must have at least one of these roles."""
-        async def dependency(request: Request) -> Principal:
-            p = await self.principal(request)
+        async def dependency(p: Principal = Depends(self.principal)) -> Principal:
             try:
                 return p.require_any_role(*roles)
             except AuthError as e:

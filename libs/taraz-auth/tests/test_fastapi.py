@@ -3,6 +3,7 @@ import time
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from jwt.exceptions import PyJWKClientConnectionError
 
 from taraz_auth.fastapi import FastAPIAuth
 
@@ -71,3 +72,37 @@ def test_require_any_and_principal_on_request_state(client, make_token):
 
 def test_wrong_scheme_is_401(client, make_token):
     assert client.get("/me", headers={"Authorization": f"Basic {make_token()}"}).status_code == 401
+
+
+def test_keys_unavailable_is_503(client, verifier, make_token):
+    def down():
+        raise PyJWKClientConnectionError("connection refused")
+
+    verifier._keys.fetch_data = down
+    r = client.get("/me", headers=bearer(make_token()))
+    assert r.status_code == 503 and r.json()["detail"]["error"] == "keys_unavailable"
+    assert "www-authenticate" not in r.headers
+
+
+def test_openapi_declares_bearer_auth(client):
+    spec = client.app.openapi()
+    assert spec["components"]["securitySchemes"]["bearerAuth"] == {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+    for path in ("/me", "/admin", "/approve"):
+        assert spec["paths"][path]["get"]["security"] == [{"bearerAuth": []}]
+
+
+def test_principal_can_still_be_called_directly(verifier, make_token):
+    auth = FastAPIAuth(verifier)
+    app = FastAPI()
+
+    async def member(request: Request):
+        return await auth.principal(request)
+
+    @app.get("/member")
+    def member_route(user=Depends(member)):
+        return {"user": user.username}
+
+    c = TestClient(app)
+    assert c.get("/member", headers=bearer(make_token())).status_code == 200
+    r = c.get("/member")
+    assert r.status_code == 401 and r.headers["www-authenticate"] == 'Bearer error="missing_token"'
