@@ -9,6 +9,7 @@ Every check a service needs, in one place:
 Role checks come afterwards, on the Principal (require_roles / require_any_role).
 """
 
+import logging
 import os
 from typing import Any, Iterable
 
@@ -23,6 +24,8 @@ from jwt.exceptions import (
 
 from .errors import ExpiredToken, InvalidToken, KeysUnavailable, WrongTenant
 from .principal import Principal
+
+log = logging.getLogger("taraz_auth")
 
 
 class TokenVerifier:
@@ -52,7 +55,6 @@ class TokenVerifier:
         self.algorithms = list(algorithms)
         self._keys = PyJWKClient(
             jwks_url or f"{self.issuer}/protocol/openid-connect/certs",
-            cache_keys=True,
             lifespan=keys_cache_seconds,
             timeout=http_timeout_seconds,
         )
@@ -79,9 +81,12 @@ class TokenVerifier:
         try:
             signing_key = self._keys.get_signing_key_from_jwt(token)
         except PyJWKClientConnectionError as e:
-            raise KeysUnavailable(f"couldn't fetch signing keys: {e}") from None
+            log.warning("couldn't fetch signing keys: %s", e)
+            raise KeysUnavailable("couldn't fetch signing keys") from None
         except (PyJWKClientError, InvalidTokenError) as e:
-            raise InvalidToken(f"unknown or unreadable signing key: {e}") from None
+            # Callers get a fixed message: the detail can repeat what the caller sent, or name internal addresses
+            log.info("refused a token: %r", str(e))
+            raise InvalidToken("unknown or unreadable signing key") from None
 
         try:
             claims: dict[str, Any] = jwt.decode(
@@ -96,9 +101,10 @@ class TokenVerifier:
         except ExpiredSignatureError:
             raise ExpiredToken("token has expired") from None
         except InvalidTokenError as e:
-            raise InvalidToken(str(e)) from None
+            log.info("refused a token: %r", str(e))
+            raise InvalidToken("the token failed validation") from None
 
-        if claims.get("typ") not in (None, "Bearer"):
+        if claims.get("typ") != "Bearer":
             raise InvalidToken(f"not an access token (typ={claims.get('typ')})")
         if claims.get("tenant_id") != self.tenant_id:
             raise WrongTenant(f"token is for tenant {claims.get('tenant_id')!r}, this service serves {self.tenant_id!r}")

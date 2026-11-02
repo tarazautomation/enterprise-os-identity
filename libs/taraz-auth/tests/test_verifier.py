@@ -19,7 +19,7 @@ from .conftest import ISSUER
 def test_valid_token_gives_the_caller(verifier, make_token):
     p = verifier.verify(make_token())
     assert p.tenant_id == "taraz"
-    assert p.username == "junaid.asrar@taraztechnologies.com"
+    assert p.username == "test.user@example.com"
     assert p.client_id == "app-shell"
     assert p.has_role("employee") and not p.has_role("admin")
     assert not p.is_service_account and not p.is_agent
@@ -99,6 +99,25 @@ def test_id_token_is_refused_as_access_token(verifier, make_token):
         verifier.verify(make_token(typ="ID"))
 
 
+def test_token_without_a_type_is_refused(verifier, make_token):
+    with pytest.raises(InvalidToken):
+        verifier.verify(make_token(drop=("typ",)))
+
+
+def test_retired_signing_key_stops_working(verifier, make_token, other_jwks):
+    token = make_token()
+    assert verifier.verify(token).tenant_id == "taraz"
+    verifier._keys.fetch_data = lambda: other_jwks       # the realm has rotated to a new key
+    with pytest.raises(InvalidToken):
+        verifier.verify(token)
+
+
+def test_error_messages_do_not_repeat_what_the_caller_sent(verifier, make_token):
+    with pytest.raises(InvalidToken) as e:
+        verifier.verify(make_token(kid="caller-chosen-key-id"))
+    assert "caller-chosen-key-id" not in e.value.message
+
+
 @pytest.mark.parametrize("junk", ["", "abc", "a.b", "a.b.c", "Bearer x.y.z"])
 def test_garbage_is_refused(verifier, junk):
     with pytest.raises(InvalidToken):
@@ -120,8 +139,15 @@ def test_audience_is_checked_only_when_configured(verifier, make_token):
 
 
 def test_service_account_is_recognised(verifier, make_token):
-    p = verifier.verify(make_token(preferred_username="service-account-scribe", azp="scribe", drop=("email", "name")))
+    p = verifier.verify(make_token(preferred_username="service-account-scribe", azp="scribe", client_id="scribe",
+                                   drop=("email", "name")))
     assert p.is_service_account and p.client_id == "scribe"
+
+
+@pytest.mark.parametrize("extra", [{}, {"client_id": "other-client"}])
+def test_username_alone_does_not_make_a_service_account(verifier, make_token, extra):
+    p = verifier.verify(make_token(preferred_username="service-account-someone@example.com", azp="app-shell", **extra))
+    assert not p.is_service_account
 
 
 def test_agent_is_recognised(verifier, make_token):
@@ -139,6 +165,7 @@ def test_keys_unavailable_gives_503(make_token):
     with pytest.raises(KeysUnavailable) as e:
         v.verify(make_token())
     assert e.value.status == 503
+    assert "connection refused" not in e.value.message
 
 
 def test_from_env(monkeypatch):
