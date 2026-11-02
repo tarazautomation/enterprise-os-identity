@@ -35,7 +35,7 @@ On the Entra app ("Scribe Calendar Watcher", `7b315648-…`), the Web redirect U
 
 ## Admin access
 
-Only the master-realm admin `junaid.asrar`, with a password and authenticator app. The bootstrap `temp-admin` was deleted.
+One master-realm admin, with a password and authenticator app. The bootstrap `temp-admin` was deleted.
 
 ## Moving off Railway
 

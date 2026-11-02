@@ -38,7 +38,7 @@ def call(method, path, token=None, body=None, form=None):
         return e.code, e.read().decode()[:200]
 
 
-user = input("Admin console username [junaid.asrar]: ").strip() or "junaid.asrar"
+user = input("Admin console username: ").strip()
 pw = getpass.getpass("Password (hidden): ")
 code = input("6-digit code from your authenticator app: ").strip()
 s, b = call("POST", "/realms/master/protocol/openid-connect/token",
