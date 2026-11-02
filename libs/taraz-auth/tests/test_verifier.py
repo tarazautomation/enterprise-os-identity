@@ -108,6 +108,7 @@ def test_retired_signing_key_stops_working(verifier, make_token, other_jwks):
     token = make_token()
     assert verifier.verify(token).tenant_id == "taraz"
     verifier._keys.fetch_data = lambda: other_jwks       # the realm has rotated to a new key
+    verifier._keys.jwk_set_cache.put(None)               # and the 5-minute key set cache has run out
     with pytest.raises(InvalidToken):
         verifier.verify(token)
 
