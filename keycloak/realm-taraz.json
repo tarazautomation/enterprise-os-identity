@@ -4,7 +4,7 @@
   "displayName": "Taraz",
   "notBefore": 0,
   "defaultSignatureAlgorithm": "RS256",
-  "revokeRefreshToken": false,
+  "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
   "accessTokenLifespan": 300,
   "accessTokenLifespanForImplicitFlow": 900,
@@ -13,7 +13,7 @@
   "ssoSessionIdleTimeoutRememberMe": 0,
   "ssoSessionMaxLifespanRememberMe": 0,
   "offlineSessionIdleTimeout": 2592000,
-  "offlineSessionMaxLifespanEnabled": false,
+  "offlineSessionMaxLifespanEnabled": true,
   "offlineSessionMaxLifespan": 5184000,
   "clientSessionIdleTimeout": 0,
   "clientSessionMaxLifespan": 0,
@@ -36,7 +36,7 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": false,
   "editUsernameAllowed": false,
-  "bruteForceProtected": false,
+  "bruteForceProtected": true,
   "permanentLockout": false,
   "maxTemporaryLockouts": 0,
   "bruteForceStrategy": "MULTIPLE",
@@ -45,7 +45,7 @@
   "waitIncrementSeconds": 60,
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
-  "failureFactor": 30,
+  "failureFactor": 10,
   "maxSecondaryAuthFailures": 0,
   "roles": {
     "realm": [
@@ -80,7 +80,6 @@
           ],
           "client": {
             "account": [
-              "manage-account",
               "view-profile"
             ]
           }
@@ -1110,7 +1109,6 @@
       "secret": "${KC_CLIENT_SECRET_SCRIBE}",
       "redirectUris": [
         "https://web-production-ca083.up.railway.app/*",
-        "http://localhost:8000/*",
         "https://scribe-staging.up.railway.app/*"
       ],
       "webOrigins": [
@@ -1160,7 +1158,7 @@
       "clientId": "scribe-desktop",
       "name": "Scribe desktop app (Windows)",
       "surrogateAuthRequired": false,
-      "enabled": true,
+      "enabled": false,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
@@ -2165,13 +2163,14 @@
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
   "smtpServer": {},
-  "eventsEnabled": false,
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
   "eventsListeners": [
     "jboss-logging"
   ],
   "enabledEventTypes": [],
-  "adminEventsEnabled": false,
-  "adminEventsDetailsEnabled": false,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
   "identityProviders": [
     {
       "alias": "entra",
@@ -3300,7 +3299,8 @@
     "oauth2DevicePollingInterval": "5",
     "parRequestUriLifespan": "60",
     "cibaInterval": "5",
-    "realmReusableOtpCode": "false"
+    "realmReusableOtpCode": "false",
+    "adminEventsExpiration": "7776000"
   },
   "keycloakVersion": "26.8.1",
   "userManagedAccessAllowed": false,
