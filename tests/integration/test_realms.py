@@ -74,10 +74,11 @@ def create_user(admin, realm: str, roles=(), password: str | None = None) -> tup
     return uid, name
 
 
-def form_action(page: str) -> str:
-    m = re.search(r'<form[^>]*\baction="([^"]+)"', page)
-    assert m, what_page(page)
-    return html.unescape(m.group(1))
+def form_action(r: httpx.Response) -> str:
+    """Where the page's form posts to, as a full address (Keycloak writes some of them relative)."""
+    m = re.search(r'<form[^>]*\baction="([^"]+)"', r.text)
+    assert m, what_page(r.text)
+    return urljoin(str(r.url), html.unescape(m.group(1)))
 
 
 def hidden_fields(page: str) -> dict:
@@ -123,10 +124,10 @@ def sign_in(realm: str, client_id: str, redirect_uri: str, username: str, passwo
         page = h.get(f"{issuer(realm)}/protocol/openid-connect/auth", follow_redirects=True, params={
             "client_id": client_id, "response_type": "code", "scope": "openid", "redirect_uri": redirect_uri,
             "state": "ci", "code_challenge": challenge, "code_challenge_method": "S256"})
-        r = within_keycloak(h, h.post(form_action(page.text), headers=cookies(h),
+        r = within_keycloak(h, h.post(form_action(page), headers=cookies(h),
                                       data={**hidden_fields(page.text), "username": username, "password": password}))
         if r.status_code == 200 and 'name="accept"' in r.text:              # the consent screen
-            r = within_keycloak(h, h.post(form_action(r.text), headers=cookies(h),
+            r = within_keycloak(h, h.post(form_action(r), headers=cookies(h),
                                           data={**hidden_fields(r.text), "accept": "Yes"}))
         assert r.status_code in (302, 303), what_page(r.text)
         query = parse_qs(urlparse(r.headers["location"]).query)
