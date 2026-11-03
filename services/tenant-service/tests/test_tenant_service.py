@@ -19,13 +19,21 @@ def admin_hdr(token, people):
 # --- P2.2 done-when 1: a new Keycloak user shows up (here: on the next sync) ---
 
 def test_new_keycloak_user_appears_after_sync(kc, app_client, token, people):
-    hdr = token(people["ali"])
-    assert app_client.get("/v1/members", headers=hdr).json()["total"] == 3
+    assert app_client.get("/v1/members", headers=token(people["ali"])).json()["total"] == 3
     newbie = kc.add_user("newbie")
     app_client.post("/v1/sync", headers=admin_hdr(token, people))
-    m = app_client.get(f"/v1/members/{newbie}", headers=hdr).json()
+    m = app_client.get(f"/v1/members/{newbie}", headers=admin_hdr(token, people)).json()
     assert m["username"] == "newbie" and m["roles"] == ["employee"] and m["status"] == "active"
-    assert set(m["apps"]) == {"app-shell", "scribe", "lectra", "knowledge-base", "mcp-server"}   # defaults
+
+
+def test_members_who_arent_admins_see_names_and_emails_only(app_client, token, people):
+    hdr = token(people["ali"])
+    sara = app_client.get(f"/v1/members/{people['sara']}", headers=hdr).json()
+    assert set(sara) == {"id", "name", "email"}
+    assert all(set(m) == {"id", "name", "email"} for m in app_client.get("/v1/members", headers=hdr).json()["items"])
+    assert app_client.get("/v1/members?role=admin", headers=hdr).status_code == 403
+    assert app_client.get("/v1/members?status=all", headers=hdr).status_code == 403
+    assert app_client.get("/v1/me", headers=hdr).json()["roles"] == ["employee"]      # your own record in full
 
 
 def test_me_fetches_a_brand_new_member_immediately(kc, app_client, token):
@@ -79,14 +87,25 @@ def test_employee_cannot_change_roles(app_client, token, people):
     assert r.status_code == 403
 
 
-# --- app access ---
+# --- app access: kept but not offered until apps enforce it ---
 
-def test_admin_sets_apps(app_client, token, people):
+def test_app_access_is_not_offered(app_client, token, people):
     hdr = admin_hdr(token, people)
-    r = app_client.put(f"/v1/members/{people['ali']}/apps", headers=hdr, json={"apps": ["scribe"]})
-    assert r.status_code == 200 and r.json()["apps"] == ["scribe"]
-    assert app_client.get("/v1/members?app=lectra", headers=hdr).json()["total"] == 2
-    assert app_client.put(f"/v1/members/{people['ali']}/apps", headers=hdr, json={"apps": ["nope"]}).status_code == 422
+    assert app_client.put(f"/v1/members/{people['ali']}/apps", headers=hdr, json={"apps": ["scribe"]}).status_code == 404
+    assert app_client.get("/v1/apps", headers=hdr).status_code == 404
+    assert "apps" not in app_client.get(f"/v1/members/{people['ali']}", headers=hdr).json()
+
+
+# --- who may change members ---
+
+def test_admin_changes_come_only_from_the_admin_portal(app_client, token, people):
+    hdr = token(people["junaid"], roles=["admin", "employee"], azp="knowledge-base")
+    r = app_client.put(f"/v1/members/{people['sara']}/roles", headers=hdr, json={"roles": []})
+    assert r.status_code == 403 and r.json()["detail"]["error"] == "wrong_client"
+
+
+def test_a_token_for_another_service_is_refused(app_client, token, people):
+    assert app_client.get("/v1/members", headers=token(people["ali"], aud=["knowledge-base"])).status_code == 401
 
 
 # --- disable / enable ---
@@ -107,14 +126,16 @@ def test_cannot_disable_yourself(app_client, token, people):
 # --- directory and permissions ---
 
 def test_directory_search_and_filters(app_client, token, people):
-    hdr = token(people["ali"])
-    assert [m["username"] for m in app_client.get("/v1/members?q=SAR", headers=hdr).json()["items"]] == ["sara"]
+    assert [m["name"] for m in app_client.get("/v1/members?q=SAR", headers=token(people["ali"])).json()["items"]] == \
+        ["Test Sara"]
+    hdr = admin_hdr(token, people)
     assert app_client.get("/v1/members?role=admin", headers=hdr).json()["items"][0]["username"] == "junaid"
 
 
 def test_service_account_can_read_but_has_no_me(app_client, token, people):
     svc = token("svc-id", roles=["default-roles-taraz"], username="service-account-scribe", azp="scribe", client_id="scribe")
-    assert app_client.get("/v1/members", headers=svc).status_code == 200
+    r = app_client.get("/v1/members", headers=svc)
+    assert r.status_code == 200 and "roles" in r.json()["items"][0]
     assert app_client.get("/v1/me", headers=svc).status_code == 404
 
 
@@ -128,7 +149,6 @@ def test_reference_lists(app_client, token, people):
     hdr = token(people["ali"])
     roles = {r["name"]: r["editable"] for r in app_client.get("/v1/roles", headers=hdr).json()}
     assert roles == {"admin": True, "process_owner": True, "employee": False, "agent": False}
-    assert len(app_client.get("/v1/apps", headers=hdr).json()) == 5
     assert app_client.get("/v1/tenant", headers=hdr).json() == {"id": "taraz", "name": "Taraz Technologies", "status": "active"}
 
 

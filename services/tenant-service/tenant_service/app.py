@@ -77,8 +77,11 @@ def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = 
                   description="The member directory and admin-portal back end for one tenant (P2.2). "
                               "Keycloak holds accounts and roles; this service mirrors them and adds app access, "
                               "agents, invites and change history.")
-    auth = FastAPIAuth(verifier or TokenVerifier(settings.issuer, settings.tenant_id, jwks_url=settings.jwks_url))
-    app.include_router(build_router(auth, get_session, get_kc, settings.tenant_id, state))
+    # Tokens must be addressed to this service: its client id is its audience
+    audience = settings.client_id if settings.check_audience else None
+    auth = FastAPIAuth(verifier or TokenVerifier(settings.issuer, settings.tenant_id, audience=audience,
+                                                 jwks_url=settings.jwks_url))
+    app.include_router(build_router(auth, get_session, get_kc, settings.tenant_id, state, settings.admin_clients))
 
     @app.exception_handler(KeycloakError)
     async def keycloak_error(_, exc: KeycloakError):
