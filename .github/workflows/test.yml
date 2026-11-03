@@ -1,4 +1,4 @@
-# Tests and a dependency audit on every pull request and on main.
+# Tests, a dependency audit and a real Keycloak run on every pull request and on main.
 name: test
 
 on:
@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  KEYCLOAK_IMAGE: quay.io/keycloak/keycloak:26.8.1
+  CONFIG_CLI_IMAGE: docker.io/adorsys/keycloak-config-cli:6.5.1-26.5.5@sha256:0955d98c8a341898b7aa177477edf8a1e90569ae50bbe7598141c1270b773274
 
 jobs:
   test:
@@ -25,10 +29,66 @@ jobs:
       - name: tenant-service tests
         working-directory: services/tenant-service
         run: pytest
-      - name: The realm import matches the realm file
+      - name: The realm files match the template and the tenant files
         run: |
+          python keycloak/render.py --check
           python deploy/k8s/tools/make-realm-import.py keycloak/realm-taraz.json "$RUNNER_TEMP/realm-import.json"
           diff "$RUNNER_TEMP/realm-import.json" deploy/k8s/base/keycloak/realm-import.json
+      - name: openapi.json matches the code
+        working-directory: services/tenant-service
+        run: |
+          mkdir -p "$RUNNER_TEMP/openapi"
+          python -m tenant_service.export_openapi "$RUNNER_TEMP/openapi/openapi.json"
+          diff -u openapi.json "$RUNNER_TEMP/openapi/openapi.json"
+      - name: Keep the generated openapi.json
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openapi
+          path: ${{ runner.temp }}/openapi/openapi.json
+          if-no-files-found: ignore
+
+  keycloak:
+    runs-on: ubuntu-latest
+    env:
+      KC_URL: http://localhost:8080
+      KC_ADMIN_USER: admin
+      KC_ADMIN_PASSWORD: ci-admin-password
+      KC_ENTRA_CLIENT_SECRET: ci-not-a-real-secret
+      KC_CI_ENTRA_CLIENT_SECRET: ci-not-a-real-secret
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Start Keycloak
+        run: |
+          docker run -d --name keycloak -p 8080:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME="$KC_ADMIN_USER" -e KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_ADMIN_PASSWORD" \
+            "$KEYCLOAK_IMAGE" start-dev
+          for i in $(seq 1 90); do curl -sf "$KC_URL/realms/master" >/dev/null && exit 0; sleep 2; done
+          docker logs keycloak; exit 1
+      - name: Render the Taraz realm and two test tenants
+        run: |
+          mkdir -p "$RUNNER_TEMP/realms"
+          cp keycloak/realm-taraz.json "$RUNNER_TEMP/realms/"
+          python keycloak/render.py --tenants tests/integration/tenants --out "$RUNNER_TEMP/realms"
+      - name: Apply them with keycloak-config-cli, twice (a second run must keep everything working)
+        run: |
+          for run in 1 2; do
+            docker run --rm --network host --env-file keycloak/config-cli.env \
+              -e KEYCLOAK_URL="$KC_URL" -e KEYCLOAK_USER="$KC_ADMIN_USER" -e KEYCLOAK_PASSWORD="$KC_ADMIN_PASSWORD" \
+              -e KEYCLOAK_AVAILABILITYCHECK_ENABLED=true -e IMPORT_FILES_LOCATIONS='/config/*' \
+              -e KC_ENTRA_CLIENT_SECRET -e KC_CI_ENTRA_CLIENT_SECRET \
+              -v "$RUNNER_TEMP/realms:/config:ro" "$CONFIG_CLI_IMAGE"
+          done
+      - name: Install
+        run: pip install -e "libs/taraz-auth[test]" -e services/tenant-service
+      - name: Tests against the real Keycloak
+        run: pytest tests/integration -v
+      - name: Keycloak's log
+        if: failure()
+        run: docker logs keycloak 2>&1 | tail -200
 
   audit:
     runs-on: ubuntu-latest
