@@ -111,3 +111,14 @@ jobs:
         run: pip install -e "libs/taraz-auth[fastapi]" -e services/tenant-service pip-audit
       - name: Known vulnerabilities in dependencies
         run: pip-audit --skip-editable
+      - name: Known vulnerabilities in what the image installs (requirements.lock)
+        run: pip-audit --require-hashes -r services/tenant-service/requirements.lock
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build tenant-service's image from the lock
+        run: docker build -f services/tenant-service/Dockerfile -t tenant-service .
+      - name: It runs as the non-root user and has what the service imports
+        run: docker run --rm tenant-service sh -c 'test "$(id -u)" = 10001 && python -c "import tenant_service.app, uvloop, psycopg"'

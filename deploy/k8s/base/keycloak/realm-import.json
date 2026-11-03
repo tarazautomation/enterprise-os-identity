@@ -230,6 +230,14 @@
             "employee",
             "process_owner"
           ]
+        },
+        {
+          "client": "scribe-staging",
+          "roles": [
+            "employee",
+            "process_owner",
+            "admin"
+          ]
         }
       ],
       "clientScopeMappings": {
@@ -796,8 +804,7 @@
           "alwaysDisplayInConsole": false,
           "clientAuthenticatorType": "client-secret",
           "redirectUris": [
-            "https://web-production-ca083.up.railway.app/*",
-            "https://scribe-staging.up.railway.app/*"
+            "https://web-production-ca083.up.railway.app/*"
           ],
           "webOrigins": [
             "+"
@@ -818,7 +825,7 @@
             "backchannel.logout.session.required": "true",
             "post.logout.redirect.uris": "+",
             "backchannel.logout.revoke.offline.tokens": "false",
-            "backchannel.logout.url": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
+            "backchannel.logout.url": "https://web-production-ca083.up.railway.app/auth/keycloak/backchannel-logout"
           },
           "authenticationFlowBindingOverrides": {},
           "fullScopeAllowed": false,
@@ -1049,6 +1056,64 @@
             "basic",
             "tenant",
             "email",
+            "aud-audit-log"
+          ],
+          "optionalClientScopes": [
+            "address",
+            "phone",
+            "offline_access",
+            "organization",
+            "microprofile-jwt"
+          ]
+        },
+        {
+          "clientId": "scribe-staging",
+          "name": "Scribe staging (web + workers)",
+          "surrogateAuthRequired": false,
+          "enabled": true,
+          "alwaysDisplayInConsole": false,
+          "clientAuthenticatorType": "client-secret",
+          "redirectUris": [
+            "https://scribe-staging.up.railway.app/*"
+          ],
+          "webOrigins": [
+            "+"
+          ],
+          "notBefore": 0,
+          "bearerOnly": false,
+          "consentRequired": false,
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": false,
+          "directAccessGrantsEnabled": false,
+          "serviceAccountsEnabled": true,
+          "publicClient": false,
+          "frontchannelLogout": true,
+          "protocol": "openid-connect",
+          "attributes": {
+            "realm_client": "false",
+            "client.secret.creation.time": "1792391104",
+            "backchannel.logout.session.required": "true",
+            "post.logout.redirect.uris": "+",
+            "backchannel.logout.revoke.offline.tokens": "false",
+            "backchannel.logout.url": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
+          },
+          "authenticationFlowBindingOverrides": {},
+          "fullScopeAllowed": false,
+          "nodeReRegistrationTimeout": -1,
+          "defaultClientScopes": [
+            "web-origins",
+            "service_account",
+            "acr",
+            "roles",
+            "profile",
+            "basic",
+            "tenant",
+            "email",
+            "entra",
+            "aud-scribe-staging",
+            "aud-lectra",
+            "aud-storage-service",
+            "aud-tenant-service",
             "aud-audit-log"
           ],
           "optionalClientScopes": [
@@ -1880,6 +1945,29 @@
               "consentRequired": false,
               "config": {
                 "included.client.audience": "scribe",
+                "id.token.claim": "false",
+                "access.token.claim": "true",
+                "introspection.token.claim": "true"
+              }
+            }
+          ]
+        },
+        {
+          "name": "aud-scribe-staging",
+          "description": "Puts scribe-staging in the token's audience, so scribe-staging accepts the token",
+          "protocol": "openid-connect",
+          "attributes": {
+            "include.in.token.scope": "false",
+            "display.on.consent.screen": "false"
+          },
+          "protocolMappers": [
+            {
+              "name": "audience scribe-staging",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "consentRequired": false,
+              "config": {
+                "included.client.audience": "scribe-staging",
                 "id.token.claim": "false",
                 "access.token.claim": "true",
                 "introspection.token.claim": "true"

@@ -93,6 +93,38 @@ def test_a_next_page_on_another_address_is_refused():
         g.accounts()
 
 
+# --- removed from the sign-in app ---
+
+def test_people_no_longer_assigned_to_the_sign_in_app_are_disabled(kc, staff, session):
+    accounts = {"oid-junaid": True, "oid-ali": True, "oid-sara": True}
+    res = disable_leavers(session, kc, "taraz", accounts, max_disable=5, assigned={"oid-junaid", "oid-sara"})
+    assert res.disabled == [staff["ali"]] and staff["ali"] in kc.logouts
+    reasons = {e.member_id: e.detail["reason"] for e in session.query(MemberEvent).filter_by(action="disabled_by_microsoft")}
+    assert reasons == {staff["ali"]: "no longer assigned to the sign-in app in Microsoft"}
+
+
+def test_nobody_assigned_changes_nothing(kc, staff, session):
+    with pytest.raises(EntraError, match="nobody is assigned"):
+        disable_leavers(session, kc, "taraz", {"oid-junaid": True, "oid-ali": True}, max_disable=5, assigned=set())
+    assert not kc.logouts
+
+
+def test_assignments_are_read_directly_and_through_groups():
+    seen = []
+    g = graph([{"id": "sp-1"},
+               {"value": [{"principalId": "u1", "principalType": "User"},
+                          {"principalId": "g1", "principalType": "Group"}],
+                "@odata.nextLink": "https://graph.microsoft.com/v1.0/servicePrincipals/sp-1/appRoleAssignedTo?$skiptoken=y"},
+               {"value": [{"principalId": "sp-other", "principalType": "ServicePrincipal"}]},
+               {"value": [{"id": "u2"}, {"id": "u3"}]}], seen)
+    assert g.assigned("7b315648-cdc2-432c-93e8-2881346f886d") == {"u1", "u2", "u3"}
+    paths = [r.url.path for r in seen[1:]]
+    assert paths == ["/v1.0/servicePrincipals(appId='7b315648-cdc2-432c-93e8-2881346f886d')",
+                     "/v1.0/servicePrincipals/sp-1/appRoleAssignedTo",
+                     "/v1.0/servicePrincipals/sp-1/appRoleAssignedTo",
+                     "/v1.0/groups/g1/transitiveMembers/microsoft.graph.user"]
+
+
 def test_status_shows_whether_the_leavers_sync_is_on(app_client, token, staff):
     st = app_client.get("/v1/status", headers=token(staff["junaid"], roles=["admin", "employee"])).json()
     assert st["entra_sync_enabled"] is False and st["entra_last_sync_at"] is None

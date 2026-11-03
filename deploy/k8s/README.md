@@ -40,7 +40,7 @@ Needs Linux or WSL with Docker, plus k3d (v5.9.0), kubectl, openssl and curl. Po
    ```bash
    bash local/up.sh
    ```
-3. Sign in at http://localhost:8080/realms/taraz/account with **Sign in with Microsoft 365**. Members of the Entra group "Enterprise OS Admins" set up an authenticator app on their first sign-in.
+3. Sign in at http://localhost:8080/realms/taraz/account with **Sign in with Microsoft 365**. Anyone holding the `admin` realm role (given in the admin portal, not by an Entra group) sets up an authenticator app on their first sign-in.
 4. Admin console: http://localhost:8080/admin. The user and password are in Secret `identity/keycloak-initial-admin`.
 
 The Entra app needs this Web redirect URI: `http://localhost:8080/realms/taraz/broker/entra/endpoint` (already added).

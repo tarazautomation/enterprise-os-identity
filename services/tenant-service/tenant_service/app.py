@@ -85,7 +85,9 @@ def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = 
             if not mine:
                 return None
             with SessionLocal() as s:
-                res = disable_leavers(s, get_kc(), settings.tenant_id, graph.accounts(), settings.entra_max_disable)
+                assigned = graph.assigned(settings.entra_signin_app_id) if settings.entra_signin_app_id else None
+                res = disable_leavers(s, get_kc(), settings.tenant_id, graph.accounts(), settings.entra_max_disable,
+                                      assigned)
         state.update(entra_at=res.at, entra_ok=True, entra_error=None)
         return res
 

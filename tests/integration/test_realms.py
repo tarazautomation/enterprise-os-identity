@@ -233,6 +233,19 @@ def test_taraz_sends_people_straight_to_microsoft(admin):
 
 
 def test_keycloak_tells_scribe_when_someone_signs_out(admin):
-    scribe = admin.get("/taraz/clients", params={"clientId": "scribe"}).json()[0]
-    assert scribe["attributes"]["backchannel.logout.url"].endswith("/auth/keycloak/backchannel-logout")
-    assert scribe["attributes"]["backchannel.logout.session.required"] == "true"
+    urls = set()
+    for client_id in ("scribe", "scribe-staging"):              # production and staging, each its own address
+        scribe = admin.get("/taraz/clients", params={"clientId": client_id}).json()[0]
+        assert scribe["attributes"]["backchannel.logout.url"].endswith("/auth/keycloak/backchannel-logout")
+        assert scribe["attributes"]["backchannel.logout.session.required"] == "true"
+        urls.add(scribe["attributes"]["backchannel.logout.url"])
+    assert len(urls) == 2
+
+
+def test_scribe_staging_is_a_copy_of_scribe_with_its_own_audience(admin):
+    token = service_token(admin, "taraz", "scribe-staging")
+    p = TokenVerifier(issuer("taraz"), "taraz", audience="tenant-service").verify(token)
+    assert p.is_service_account and p.client_id == "scribe-staging"
+    TokenVerifier(issuer("taraz"), "taraz", audience="scribe-staging").verify(token)    # verifies its own sign-ins
+    with pytest.raises(InvalidToken):
+        TokenVerifier(issuer("taraz"), "taraz", audience="scribe").verify(token)          # not production's

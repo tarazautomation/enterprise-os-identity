@@ -9,7 +9,9 @@ Inputs:
   access.json          which app may call which (token audiences), which user roles each app's tokens carry,
                        which clients act for agents, and the admin API rights of tenant-service
   tenants/<id>.json    one customer: realm name, its Microsoft (Entra) tenant and app, redirect addresses,
-                       back-channel logout addresses, and the name of the variable holding its Microsoft secret
+                       back-channel logout addresses, the name of the variable holding its Microsoft secret, and
+                       client_copies: more clients made from one in the template, e.g. a staging copy of scribe
+                       with its own addresses (a client has one back-channel logout address)
 
 No secret is in any of these files. Client secrets are left to Keycloak, which generates one per client, and the
 Microsoft secret is written as $(env:NAME) for keycloak-config-cli to fill in when it applies the realm.
@@ -59,6 +61,30 @@ def fill(node, tenant: dict):
         return value
 
     return TOKEN.sub(one, node)
+
+
+def add_copies(template: dict, access: dict, copies: dict) -> None:
+    """Add each copy as a client of its own: the original's settings, calls and roles, under its own client id.
+    Its redirect addresses and back-channel logout address come from the tenant file under the copy's id."""
+    clients = {c["clientId"]: c for c in template["clients"]}
+    for cid, spec in copies.items():
+        src = spec["of"]
+        if not REALM_NAME.fullmatch(cid) or cid in clients:
+            raise ValueError(f"client_copies: {cid!r} must be a new client id (lowercase letters, digits, dashes)")
+        if src not in clients:
+            raise ValueError(f"client_copies: {cid!r} copies {src!r}, which isn't a client in the template")
+        c = copy.deepcopy(clients[src])
+        c["clientId"], c["name"] = cid, spec.get("name", f"{clients[src].get('name', src)} ({cid})")
+        c["redirectUris"] = f"{{{{redirect_uris:{cid}}}}}"
+        template["clients"].append(c)
+        clients[cid] = c
+        if src in access["calls"]:                              # a client that verifies its own sign-ins lists itself
+            access["calls"][cid] = [cid if t == src else t for t in access["calls"][src]]
+        for key in ("user_roles", "admin_api"):
+            if src in access[key]:
+                access[key][cid] = list(access[key][src])
+        if src in access["token_exchange"]:
+            access["token_exchange"].append(cid)
 
 
 def audience_scope(target: str) -> dict:
@@ -128,7 +154,9 @@ def microsoft_first(realm: dict, on: bool) -> None:
 def render(template: dict, tenant: dict, access: dict) -> dict:
     if not REALM_NAME.fullmatch(tenant["realm"]):
         raise ValueError(f"realm {tenant['realm']!r}: use lowercase letters, digits and dashes, starting with a letter")
-    realm = fill(copy.deepcopy(template), tenant)
+    template, access = copy.deepcopy(template), copy.deepcopy(access)
+    add_copies(template, access, tenant.get("client_copies", {}))
+    realm = fill(template, tenant)
     apply_access(realm, access)
     microsoft_first(realm, tenant.get("microsoft_first", False))
     for cid, url in tenant.get("backchannel_logout", {}).items():

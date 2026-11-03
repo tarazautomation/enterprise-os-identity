@@ -1,0 +1,11 @@
+# The tenant-service image is built from the repo root and needs only libs/taraz-auth and services/tenant-service
+*
+!libs/taraz-auth
+!services/tenant-service
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/*.egg-info
+**/.venv
+**/.env
+**/.env.*

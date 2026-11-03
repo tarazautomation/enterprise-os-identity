@@ -4,15 +4,23 @@ Every ENTRA_SYNC_INTERVAL_SECONDS (15 minutes), read the company's Microsoft use
 disable in Keycloak, and sign out, every active member whose Microsoft account is disabled or deleted. Keycloak
 never hears about this from Microsoft by itself, so without this sync a leaver keeps their sessions.
 
+With ENTRA_SIGNIN_APP_ID (the client id of the Entra app people sign in through, which has "assignment required"
+on), a member who is no longer assigned to that app, directly or through a group, is disabled too: removing
+someone from the app in Entra stops their Enterprise OS access, not only disabling their account.
+
 It never turns anyone back on: an admin does that in the admin portal. It changes nothing when Graph returns no
-users, or when more than ENTRA_SYNC_MAX_DISABLE members would be disabled at once (a wrong tenant or app, say).
+users, no one assigned to the sign-in app, or when more than ENTRA_SYNC_MAX_DISABLE members would be disabled at
+once (a wrong tenant or app, say).
 
 Needs an Entra app in the customer's tenant, separate from the sign-in app, with the Microsoft Graph application
-permission User.Read.All (admin consent): ENTRA_TENANT_ID, ENTRA_SYNC_CLIENT_ID, ENTRA_SYNC_CLIENT_SECRET.
+permission User.Read.All (admin consent): ENTRA_TENANT_ID, ENTRA_SYNC_CLIENT_ID, ENTRA_SYNC_CLIENT_SECRET. For the
+assignment check also Application.Read.All and GroupMember.Read.All.
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from urllib.parse import quote
 
 import httpx
 from sqlalchemy import select
@@ -48,20 +56,41 @@ class GraphUsers:
             raise EntraError(f"Microsoft refused the sync app's token: HTTP {r.status_code}")
         return r.json()["access_token"]
 
+    def _get(self, url: str, headers: dict) -> dict:
+        if not url.startswith(self._graph + "/"):               # never send the token anywhere else
+            raise EntraError("Microsoft Graph returned a next page on another address")
+        r = self._http.get(url, headers=headers)
+        if r.status_code != 200:
+            raise EntraError(f"Microsoft Graph: HTTP {r.status_code} {r.text[:200]}")
+        return r.json()
+
+    def _all(self, url: str, headers: dict) -> list[dict]:
+        """Every item of a Graph listing, page by page."""
+        items = []
+        while url:
+            body = self._get(url, headers)
+            items.extend(body.get("value", []))
+            url = body.get("@odata.nextLink")
+        return items
+
     def accounts(self) -> dict[str, bool]:
         """Every user in the tenant: Microsoft user id (oid) -> whether the account is enabled."""
         headers = {"Authorization": f"Bearer {self._token()}"}
-        url, accounts = f"{self._graph}/users?$select=id,accountEnabled&$top=999", {}
-        while url:
-            if not url.startswith(self._graph + "/"):           # never send the token anywhere else
-                raise EntraError("Microsoft Graph returned a next page on another address")
-            r = self._http.get(url, headers=headers)
-            if r.status_code != 200:
-                raise EntraError(f"Microsoft Graph: HTTP {r.status_code} {r.text[:200]}")
-            body = r.json()
-            accounts.update({u["id"]: bool(u.get("accountEnabled")) for u in body.get("value", [])})
-            url = body.get("@odata.nextLink")
-        return accounts
+        users = self._all(f"{self._graph}/users?$select=id,accountEnabled&$top=999", headers)
+        return {u["id"]: bool(u.get("accountEnabled")) for u in users}
+
+    def assigned(self, app_client_id: str) -> set[str]:
+        """The users assigned to an app (its enterprise application), directly or as members of assigned groups."""
+        headers = {"Authorization": f"Bearer {self._token()}"}
+        sp = self._get(f"{self._graph}/servicePrincipals(appId='{quote(app_client_id, safe='')}')?$select=id", headers)
+        assignments = self._all(f"{self._graph}/servicePrincipals/{quote(sp['id'], safe='')}/appRoleAssignedTo"
+                                "?$select=principalId,principalType&$top=999", headers)
+        users = {a["principalId"] for a in assignments if a.get("principalType") == "User"}
+        for group in {a["principalId"] for a in assignments if a.get("principalType") == "Group"}:
+            members = self._all(f"{self._graph}/groups/{quote(group, safe='')}/transitiveMembers/microsoft.graph.user"
+                                "?$select=id&$top=999", headers)
+            users |= {m["id"] for m in members}
+        return users
 
 
 @dataclass
@@ -71,14 +100,28 @@ class LeaverResult:
     disabled: list[str] = field(default_factory=list)
 
 
-def disable_leavers(session: Session, kc, tenant_id: str, accounts: dict[str, bool], max_disable: int) -> LeaverResult:
-    """Disable, and sign out, every active member whose Microsoft account is disabled or gone."""
+def _why_leaving(oid: str, accounts: dict[str, bool], assigned: set[str] | None) -> str | None:
+    if oid not in accounts:
+        return "deleted in Microsoft"
+    if not accounts[oid]:
+        return "disabled in Microsoft"
+    if assigned is not None and oid not in assigned:
+        return "no longer assigned to the sign-in app in Microsoft"
+    return None
+
+
+def disable_leavers(session: Session, kc, tenant_id: str, accounts: dict[str, bool], max_disable: int,
+                    assigned: set[str] | None = None) -> LeaverResult:
+    """Disable, and sign out, every active member whose Microsoft account is disabled or gone, or (with
+    `assigned`, the users assigned to the sign-in app) who is no longer assigned to it."""
     if not accounts:
         raise EntraError("Microsoft Graph returned no users; nothing changed")
+    if assigned is not None and not assigned:
+        raise EntraError("nobody is assigned to the sign-in app in Microsoft (wrong ENTRA_SIGNIN_APP_ID?); "
+                         "nothing changed")
     members = session.scalars(select(Member).where(Member.tenant_id == tenant_id, Member.status == "active",
                                                    Member.entra_oid.is_not(None))).all()
-    leavers = [(m, "deleted in Microsoft" if m.entra_oid not in accounts else "disabled in Microsoft")
-               for m in members if not accounts.get(m.entra_oid, False)]
+    leavers = [(m, why) for m in members if (why := _why_leaving(m.entra_oid, accounts, assigned))]
     if len(leavers) > max_disable:
         raise EntraError(f"{len(leavers)} members would be disabled, more than ENTRA_SYNC_MAX_DISABLE={max_disable}; "
                          "nothing changed")

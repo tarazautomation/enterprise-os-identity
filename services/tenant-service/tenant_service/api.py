@@ -150,6 +150,10 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
                 with record(s, p, member_id, "roles_changed", {"added": sorted(add), "removed": sorted(remove)}):
                     kc.add_roles(member_id, add)
                     kc.remove_roles(member_id, remove)
+                    if "admin" in add:
+                        # A live session would get admin at its next refresh without the one-time code, which the
+                        # realm asks for only at a Microsoft sign-in. Ending it makes them sign in, and pass it.
+                        kc.logout(member_id)
         m = sync_one(s, kc, tenant_id, member_id, record_roles=False)      # recorded above, with who made it
         if m is None:
             raise HTTPException(404, {"error": "not_found", "message": "member no longer exists in Keycloak"})
