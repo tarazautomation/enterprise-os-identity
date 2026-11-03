@@ -11,10 +11,10 @@ Python 3.11+. Depends on PyJWT and httpx; FastAPI support is optional.
 ## Install
 
 ```bash
-pip install "taraz-auth[fastapi]==1.0.0"
+pip install "taraz-auth[fastapi]==1.1.0"
 ```
 
-Where it's published is still open (see the end). Until then, install from the wheel (`dist/taraz_auth-1.0.0-py3-none-any.whl`) or from git at tag `taraz-auth-v1.0.0`.
+Where it's published is still open (see the end). Until then, install from the wheel (`dist/taraz_auth-1.1.0-py3-none-any.whl`) or from git by commit SHA.
 
 ## Settings (environment variables)
 
@@ -91,11 +91,11 @@ with httpx.Client(auth=tokens.httpx_auth()) as http:
     http.get("http://knowledge-base.kb/api/search", params={"q": "..."})
 ```
 
-The token is cached and renewed before it expires. On a 401, it's renewed once and the request retried. Service tokens carry `tenant_id` and are recognised as `is_service_account`.
+The token is cached and renewed before it expires. On a 401, it's renewed once and the request retried. Service tokens carry `tenant_id` and are recognised as `is_service_account`, which needs both the `service-account-` username and the `client_id` claim from Keycloak's `service_account` client scope.
 
 ## What it checks, and why
 
-1. **Signature,** against the realm's public keys (cached for 5 minutes; unknown key IDs trigger a refetch, so key rotation just works). Only RS256 is accepted, so unsigned or HMAC-forged tokens are refused.
+1. **Signature,** against the realm's public keys (cached for 5 minutes, so a retired key stops working within 5 minutes; an unknown key ID triggers a refetch, at most once every 30 seconds, so a new key can take up to 30 seconds to be accepted). Only RS256 is accepted, so unsigned or HMAC-forged tokens are refused.
 2. **Issuer,** expiry and issued-at, with 30 seconds of clock leeway. `exp`, `iat`, `iss` and `sub` must be present.
 3. **`typ` is `Bearer`,** so ID tokens can't be used as access tokens.
 4. **`tenant_id` equals this cluster's tenant.** Every Taraz token, including service tokens, carries `tenant_id=taraz`.

@@ -19,7 +19,7 @@ from .principal import Principal
 from .service_client import ServiceTokenError, ServiceTokenProvider
 from .verifier import TokenVerifier
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     "AuthError",

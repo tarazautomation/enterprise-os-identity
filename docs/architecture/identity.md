@@ -84,6 +84,22 @@ The client scope `entra` adds the Microsoft user ID (`entra_oid`) and tenant ID 
 
 Every client includes the shared client scope `tenant` (realm default), which writes `tenant_id` into ID and access tokens. The value is fixed per realm (`taraz`), because one realm is one tenant. Service-account tokens (service-to-service calls) therefore carry it too; a mapper reading a user attribute missed them. Changed 2026-10-19 for P2.3. The `tenant_id` user attribute is still stored on sign-in, for reference.
 
+### Hardening set in the realm file (2026-11-02)
+
+| Setting | Value | Why |
+|---|---|---|
+| Brute-force protection | On, 10 failures | Limits guesses at the admin one-time code |
+| Login and admin events | On, with details, kept 90 days | A record of sign-ins and of who changed what |
+| Refresh tokens | Single use (`revokeRefreshToken`) | A copied refresh token stops working |
+| Offline sessions | 60-day maximum | They had no maximum age |
+| Default role | No longer includes `account:manage-account` | Microsoft owns profile fields. People can't edit them or manage consents in the account console |
+| `scribe-desktop` | Disabled | Reserved and unused. Turn it on when the app starts using it |
+| `scribe` redirects | `http://localhost:8000/*` removed | To run Scribe locally against a realm, add it in that realm only |
+
+`app-shell` and `knowledge-base` keep their localhost addresses until their real ones exist (P2.1).
+
+**A realm import only creates,** so these don't reach a realm that already exists: set them by hand there too.
+
 ## Token format
 
 Example access token, as issued to `app-shell` for the local test user `test.admin`:
@@ -138,7 +154,7 @@ What every service checks (the P2.3 auth library does this):
 
 - [x] `admin` decided in the admin portal, not by Entra groups (changed 2026-10-21; the group rule was removed).
 - [x] A one-time code for admins (done 2026-10-19).
-- [ ] Replace the Entra secret that was exposed in chat: new secrets for Keycloak and Scribe, then delete the old `y3Q…` one.
+- [ ] Replace the Entra secret that was exposed in chat: new secrets for Keycloak and Scribe, then delete the old one.
 - [ ] Linking Keycloak users to Odoo users, so Claude acting in Odoo is the real person (P2.5, with Subhan's MCP server).
 - [ ] The audience decision for P2.3 (above).
 - [ ] Add staging and production redirect URIs to the Entra app and to each client once the domains exist (P2.1).

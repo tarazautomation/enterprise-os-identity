@@ -21,8 +21,13 @@ class Principal:
 
     @property
     def is_service_account(self) -> bool:
-        """True for service-to-service calls (Keycloak service-account tokens)."""
-        return bool(self.username and self.username.startswith(SERVICE_ACCOUNT_PREFIX))
+        """True for service-to-service calls (Keycloak service-account tokens).
+
+        A username can come from Microsoft, so the prefix alone doesn't prove anything. The client_id
+        claim comes from Keycloak's service_account client scope, which only service-account sign-ins fill in.
+        """
+        return bool(self.username and self.username.startswith(SERVICE_ACCOUNT_PREFIX)
+                    and self.client_id and self.claims.get("client_id") == self.client_id)
 
     @property
     def is_agent(self) -> bool:

@@ -47,7 +47,7 @@ def mapper(attr):
                        "userinfo.token.claim": "true", "introspection.token.claim": "true"}}
 
 
-user = input("Admin console username [junaid.asrar]: ").strip() or "junaid.asrar"
+user = input("Admin console username: ").strip()
 pw = getpass.getpass("Password (hidden): ")
 code = input("6-digit code from your authenticator app: ").strip()
 s, b = call("POST", "/realms/master/protocol/openid-connect/token",

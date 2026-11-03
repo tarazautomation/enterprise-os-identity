@@ -24,9 +24,9 @@ _KEY, _PEM = _keypair()
 _OTHER_KEY, _OTHER_PEM = _keypair()   # same kid, different key: a forged signature
 
 
-def _jwks():
-    jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(_KEY.public_key()))
-    jwk.update({"kid": KID, "use": "sig", "alg": "RS256"})
+def _jwks(key=_KEY, kid=KID):
+    jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
+    jwk.update({"kid": kid, "use": "sig", "alg": "RS256"})
     return {"keys": [jwk]}
 
 
@@ -41,9 +41,9 @@ def make_token():
             "azp": "app-shell",
             "iat": now,
             "exp": now + 300,
-            "preferred_username": "junaid.asrar@taraztechnologies.com",
-            "email": "junaid.asrar@taraztechnologies.com",
-            "name": "Junaid Asrar",
+            "preferred_username": "test.user@example.com",
+            "email": "test.user@example.com",
+            "name": "Test User",
             "tenant_id": "taraz",
             "realm_access": {"roles": ["employee", "default-roles-taraz"]},
         }
@@ -57,6 +57,11 @@ def make_token():
 @pytest.fixture
 def other_pem():
     return _OTHER_PEM
+
+
+@pytest.fixture
+def other_jwks():
+    return _jwks(_OTHER_KEY, "test-key-2")
 
 
 @pytest.fixture

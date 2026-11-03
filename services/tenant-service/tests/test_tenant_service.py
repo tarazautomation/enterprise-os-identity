@@ -113,7 +113,7 @@ def test_directory_search_and_filters(app_client, token, people):
 
 
 def test_service_account_can_read_but_has_no_me(app_client, token, people):
-    svc = token("svc-id", roles=["default-roles-taraz"], username="service-account-scribe")
+    svc = token("svc-id", roles=["default-roles-taraz"], username="service-account-scribe", azp="scribe", client_id="scribe")
     assert app_client.get("/v1/members", headers=svc).status_code == 200
     assert app_client.get("/v1/me", headers=svc).status_code == 404
 
