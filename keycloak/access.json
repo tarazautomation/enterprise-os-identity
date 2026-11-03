@@ -1,0 +1,27 @@
+{
+  "_about": "Who may call whom. keycloak/render.py turns this into token audiences and role mappings for every customer's realm. A service accepts a token only if its own client id is in the token's audience, so 'calls' is the allow-list: to let X call Y, add Y to calls[X]. A client that verifies its own sign-in tokens (scribe, knowledge-base) lists itself. user_roles: the realm roles a person's token carries in that app; agents never carry admin. admin_api: the Keycloak admin rights in tenant-service's own tokens. token_exchange: clients allowed to exchange an agent's token for one addressed to another service.",
+  "calls": {
+    "app-shell": ["tenant-service", "knowledge-base", "scribe", "lectra"],
+    "scribe-desktop": ["scribe"],
+    "external-agents": ["mcp-server"],
+    "scribe": ["scribe", "lectra", "storage-service", "tenant-service", "audit-log"],
+    "knowledge-base": ["knowledge-base", "storage-service", "tenant-service", "audit-log"],
+    "lectra": ["storage-service", "audit-log"],
+    "mcp-server": ["knowledge-base", "tenant-service", "audit-log"],
+    "tenant-service": ["audit-log"],
+    "storage-service": ["audit-log"],
+    "audit-log": []
+  },
+  "user_roles": {
+    "app-shell": ["employee", "process_owner", "admin"],
+    "scribe": ["employee", "process_owner", "admin"],
+    "scribe-desktop": ["employee", "process_owner", "admin"],
+    "knowledge-base": ["employee", "process_owner", "admin"],
+    "external-agents": ["employee", "process_owner"],
+    "mcp-server": ["employee", "process_owner"]
+  },
+  "admin_api": {
+    "tenant-service": ["view-users", "query-users", "manage-users", "view-realm"]
+  },
+  "token_exchange": ["mcp-server"]
+}
