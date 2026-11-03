@@ -28,7 +28,8 @@ def _jwks():
 
 
 class FakeKeycloak:
-    """Just enough of KeycloakAdmin: users, direct realm roles, enabled flags, logouts."""
+    """Just enough of KeycloakAdmin: users, direct realm roles, enabled flags, logouts.
+    fail["method"] = an exception makes that call raise it; slow["method"] = seconds makes it wait first."""
 
     realm = "taraz"
 
@@ -36,6 +37,14 @@ class FakeKeycloak:
         self.users: dict[str, dict] = {}
         self.roles: dict[str, set[str]] = {}
         self.logouts: list[str] = []
+        self.fail: dict[str, Exception] = {}
+        self.slow: dict[str, float] = {}
+
+    def _call(self, method):
+        if method in self.slow:
+            time.sleep(self.slow[method])
+        if method in self.fail:
+            raise self.fail[method]
 
     def add_user(self, username, roles=(), enabled=True, uid=None, first="Test", last=None):
         uid = uid or str(uuid.uuid4())
@@ -46,29 +55,37 @@ class FakeKeycloak:
         return uid
 
     def list_users(self):
+        self._call("list_users")
         return [dict(u) for u in self.users.values()]
 
     def get_user(self, uid):
+        self._call("get_user")
         return dict(self.users[uid]) if uid in self.users else None
 
     def role_member_ids(self, role):
+        self._call("role_member_ids")
         if role == "default-roles-taraz":
             return set(self.users)
         return {u for u, rs in self.roles.items() if role in rs}
 
     def user_realm_roles(self, uid):
+        self._call("user_realm_roles")
         return set(self.roles.get(uid, set())) | {"employee", "default-roles-taraz"}
 
     def add_roles(self, uid, roles):
+        self._call("add_roles")
         self.roles[uid] |= set(roles)
 
     def remove_roles(self, uid, roles):
+        self._call("remove_roles")
         self.roles[uid] -= set(roles)
 
     def set_enabled(self, uid, enabled):
+        self._call("set_enabled")
         self.users[uid]["enabled"] = enabled
 
     def logout(self, uid):
+        self._call("logout")
         self.logouts.append(uid)
 
 
@@ -77,16 +94,20 @@ def kc():
     return FakeKeycloak()
 
 
-@pytest.fixture
-def app_client(kc):
+def build_app(kc, database_url="sqlite://", **settings):
+    """The real app on a test database, with the fake Keycloak and keys of its own."""
     settings = Settings(issuer=ISSUER, tenant_id="taraz", tenant_name="Taraz Technologies", client_id="tenant-service",
-                        client_secret="x", database_url="sqlite://")
-    engine = make_engine("sqlite://")
+                        client_secret="x", database_url=database_url, **settings)
+    engine = make_engine(database_url)
     Base.metadata.create_all(engine)
     verifier = TokenVerifier(ISSUER, "taraz", audience="tenant-service")
     verifier._keys.fetch_data = _jwks
-    app = create_app(settings, kc=kc, verifier=verifier, engine=engine, run_sync_loop=False)
-    with TestClient(app) as c:       # runs startup: seeds tenant + apps
+    return create_app(settings, kc=kc, verifier=verifier, engine=engine, run_sync_loop=False)
+
+
+@pytest.fixture
+def app_client(kc):
+    with TestClient(build_app(kc)) as c:       # runs startup: seeds tenant + apps
         yield c
 
 

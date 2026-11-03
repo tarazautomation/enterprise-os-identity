@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tenant-service"
-version = "1.0.0"
+version = "1.1.0"
 description = "Enterprise OS member directory and admin-portal back end (P2.2): tenants, members, roles, app access, agents, invites, kept in sync with Keycloak."
 requires-python = ">=3.11"
 dependencies = [

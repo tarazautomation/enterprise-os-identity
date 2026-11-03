@@ -3,7 +3,7 @@
   "info": {
     "title": "Enterprise OS tenant service",
     "description": "The member directory and admin-portal back end for one tenant (P2.2). Keycloak holds accounts and roles; this service mirrors them and adds app access, agents, invites and change history.",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "paths": {
     "/v1/me": {
@@ -409,7 +409,7 @@
         "tags": [
           "admin"
         ],
-        "summary": "A member's change history",
+        "summary": "A member's change history (an invite's: invite:<invite id>)",
         "operationId": "events_v1_members__member_id__events_get",
         "security": [
           {
@@ -639,6 +639,25 @@
         ],
         "summary": "Sync with Keycloak now",
         "operationId": "sync_now_v1_sync_post",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "allow_removals",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Apply it even if more than SYNC_MAX_REMOVE members would be removed (they really left)",
+              "default": false,
+              "title": "Allow Removals"
+            },
+            "description": "Apply it even if more than SYNC_MAX_REMOVE members would be removed (they really left)"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -649,13 +668,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+        }
       }
     }
   },
