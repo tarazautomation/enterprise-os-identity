@@ -611,7 +611,7 @@
         "tags": [
           "admin"
         ],
-        "summary": "Last sync with Keycloak and member counts",
+        "summary": "Last syncs (Keycloak, leavers from Microsoft) and member counts",
         "operationId": "status__v1_status_get",
         "responses": {
           "200": {
@@ -1073,6 +1073,45 @@
           "members_removed": {
             "type": "integer",
             "title": "Members Removed"
+          },
+          "entra_sync_enabled": {
+            "type": "boolean",
+            "title": "Entra Sync Enabled",
+            "description": "Whether leavers are read from Microsoft (ENTRA_* settings)"
+          },
+          "entra_last_sync_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entra Last Sync At"
+          },
+          "entra_last_sync_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entra Last Sync Ok"
+          },
+          "entra_last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entra Last Error"
           }
         },
         "type": "object",
@@ -1082,7 +1121,11 @@
           "last_error",
           "members_active",
           "members_disabled",
-          "members_removed"
+          "members_removed",
+          "entra_sync_enabled",
+          "entra_last_sync_at",
+          "entra_last_sync_ok",
+          "entra_last_error"
         ],
         "title": "SyncStatus"
       },
