@@ -2,7 +2,7 @@
 
 Owner: Junaid · Task: P0.4 · Status: draft, 2026-10-19
 
-One sign-in for every Enterprise OS app. Keycloak issues the tokens; Microsoft 365 (Entra ID) checks who the person is; every service checks the token with the shared auth library (P2.3). This page and `realm-taraz.json` are what P2.1 deploys unchanged.
+One sign-in for every Enterprise OS app. Keycloak issues the tokens; Microsoft 365 (Entra ID) checks who the person is; every service checks the token with the shared auth library (P2.3). The realm comes from `keycloak/` (a template, one file per customer, and `access.json`); keycloak-config-cli applies it to each Keycloak, and CI checks the rendered files are current. A setting changed by hand in a Keycloak console is put back by the next apply if it's in these files; things added by hand that aren't in them stay (nothing is deleted).
 
 ## How a person signs in
 
@@ -168,7 +168,7 @@ The realm files contain no secrets and no signing keys. Keycloak generates keys 
 
 ## Leavers (decided 2026-11-03)
 
-Microsoft doesn't tell Keycloak when someone leaves. tenant-service's leavers' sync reads the company's Microsoft users through Microsoft Graph every 15 minutes and disables, and signs out, every member whose Microsoft account is disabled or deleted. People removed from the Entra app's assignment but still enabled in Microsoft aren't covered yet: disable the account in Microsoft, or in the admin portal.
+Microsoft doesn't tell Keycloak when someone leaves. tenant-service's leavers' sync reads the company's Microsoft users through Microsoft Graph every 15 minutes and disables, and signs out, every member whose Microsoft account is disabled or deleted. With `ENTRA_SIGNIN_APP_ID` set (the sign-in app, with assignment required), it also disables members who are no longer assigned to that app, directly or through a group. Scribe's desktops, which run on Scribe's own device tokens, ask tenant-service at each refresh whether the person is still an active member (Scribe's `TENANT_SERVICE_URL`).
 
 Each customer needs a second Entra app for it, with the Graph application permission `User.Read.All` and admin consent (tenant-service README, settings).
 

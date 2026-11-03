@@ -1,0 +1,21 @@
+# Weekly update proposals: the Actions the workflows use (pinned by commit), tenant-service's locked packages
+# (requirements.lock) and the libraries' declared dependencies, and the base image (pinned by digest).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directories:
+      - /services/tenant-service
+      - /libs/taraz-auth
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /services/tenant-service
+    schedule:
+      interval: weekly

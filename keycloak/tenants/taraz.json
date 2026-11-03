@@ -9,11 +9,16 @@
   "redirect_uris": {
     "app-shell": ["http://localhost:3000/*", "http://localhost:5173/*"],
     "knowledge-base": ["http://localhost:8000/*"],
-    "scribe": ["https://web-production-ca083.up.railway.app/*", "https://scribe-staging.up.railway.app/*"],
+    "scribe": ["https://web-production-ca083.up.railway.app/*"],
+    "scribe-staging": ["https://scribe-staging.up.railway.app/*"],
     "scribe-desktop": ["http://127.0.0.1/*"]
   },
+  "client_copies": {
+    "scribe-staging": {"of": "scribe", "name": "Scribe staging (web + workers)"}
+  },
   "backchannel_logout": {
-    "scribe": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
+    "scribe": "https://web-production-ca083.up.railway.app/auth/keycloak/backchannel-logout",
+    "scribe-staging": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
   },
   "secrets": {
     "entra": "KC_ENTRA_CLIENT_SECRET"

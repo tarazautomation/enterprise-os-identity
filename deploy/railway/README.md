@@ -96,7 +96,11 @@ Scribe's variables (project "Scribe Minio", service `scribe`; staging deploys fr
 |---|---|
 | `SIGN_IN` | `keycloak` (remove it, or set `microsoft`, to go back to the old sign-in) |
 | `TARAZ_AUTH_ISSUER` | `https://taraz-auth.up.railway.app/realms/taraz` |
-| `TARAZ_AUTH_CLIENT_ID` | `scribe` (the default) |
-| `TARAZ_AUTH_CLIENT_SECRET` | from `scribe-secret.txt` |
+| `TARAZ_AUTH_CLIENT_ID` | production: `scribe` (the default). Staging: `scribe-staging` |
+| `TARAZ_AUTH_CLIENT_SECRET` | that client's secret (Keycloak admin console > Clients > the client > Credentials) |
+| `TENANT_SERVICE_URL` | tenant-service's address, so a leaver's desktop is stopped at its next refresh |
+| `ALLOWED_TENANT_IDS` | Taraz's Microsoft tenant id (`9f1a1bc4-e5b7-4144-99b3-1f692eae04fd`), and those of other companies that may use Scribe |
 
-The Keycloak `scribe` client already allows `https://scribe-staging.up.railway.app/*` and `https://web-production-ca083.up.railway.app/*` as return addresses.
+Production and staging are separate Keycloak clients, `scribe` and `scribe-staging` (`keycloak/tenants/taraz.json`), because a client has one back-channel logout address: each tells its own Scribe when someone signs out. `scribe` allows `https://web-production-ca083.up.railway.app/*`, and `scribe-staging` allows `https://scribe-staging.up.railway.app/*`.
+
+Before switching production, run `python scripts/keycloak_cutover_check.py` in Scribe's production shell. It lists accounts without a Microsoft id, prints the operator's Microsoft id for `ADMIN_MICROSOFT_IDS`, and checks the variables above.

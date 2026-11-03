@@ -67,6 +67,14 @@ def test_admin_changes_roles_in_keycloak(kc, app_client, token, people):
     assert ev[0]["actor_name"] == "junaid"
 
 
+def test_making_someone_admin_ends_their_sessions(kc, app_client, token, people):
+    hdr = admin_hdr(token, people)
+    app_client.put(f"/v1/members/{people['sara']}/roles", headers=hdr, json={"roles": []})
+    assert kc.logouts == []                                     # other changes leave sessions alone
+    app_client.put(f"/v1/members/{people['ali']}/roles", headers=hdr, json={"roles": ["admin"]})
+    assert kc.logouts == [people["ali"]]
+
+
 def test_only_admin_and_process_owner_are_editable(app_client, token, people):
     r = app_client.put(f"/v1/members/{people['ali']}/roles", headers=admin_hdr(token, people), json={"roles": ["agent"]})
     assert r.status_code == 422 and r.json()["detail"]["error"] == "role_not_editable"
