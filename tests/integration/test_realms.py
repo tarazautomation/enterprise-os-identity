@@ -17,7 +17,7 @@ import re
 import secrets
 import uuid
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 import pytest
@@ -91,6 +91,18 @@ def hidden_fields(page: str) -> dict:
     return fields
 
 
+def within_keycloak(h: httpx.Client, r: httpx.Response) -> httpx.Response:
+    """Follow redirects while they stay on Keycloak (to its consent page, say); stop at the app's address."""
+    for _ in range(10):
+        if r.status_code not in (302, 303):
+            return r
+        location = urljoin(str(r.url), r.headers["location"])
+        if not location.startswith(KC):
+            return r
+        r = h.get(location, headers=cookies(h))
+    return r
+
+
 def what_page(page: str) -> str:
     """A Keycloak page's title and message, for a readable failure."""
     title = re.search(r'id="kc-page-title"[^>]*>\s*([^<]+)', page)
@@ -111,10 +123,11 @@ def sign_in(realm: str, client_id: str, redirect_uri: str, username: str, passwo
         page = h.get(f"{issuer(realm)}/protocol/openid-connect/auth", follow_redirects=True, params={
             "client_id": client_id, "response_type": "code", "scope": "openid", "redirect_uri": redirect_uri,
             "state": "ci", "code_challenge": challenge, "code_challenge_method": "S256"})
-        r = h.post(form_action(page.text), headers=cookies(h),
-                   data={**hidden_fields(page.text), "username": username, "password": password})
+        r = within_keycloak(h, h.post(form_action(page.text), headers=cookies(h),
+                                      data={**hidden_fields(page.text), "username": username, "password": password}))
         if r.status_code == 200 and 'name="accept"' in r.text:              # the consent screen
-            r = h.post(form_action(r.text), headers=cookies(h), data={**hidden_fields(r.text), "accept": "Yes"})
+            r = within_keycloak(h, h.post(form_action(r.text), headers=cookies(h),
+                                          data={**hidden_fields(r.text), "accept": "Yes"}))
         assert r.status_code in (302, 303), what_page(r.text)
         query = parse_qs(urlparse(r.headers["location"]).query)
         assert "code" in query, f"no code in the redirect: {query}"
