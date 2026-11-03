@@ -1,6 +1,6 @@
 """A tiny service protected by taraz-auth, for the P2.3 "how to check".
 
-    TARAZ_AUTH_ISSUER=http://localhost:8080/realms/taraz TARAZ_AUTH_TENANT_ID=taraz \
+    TARAZ_AUTH_ISSUER=http://localhost:8080/realms/taraz TARAZ_AUTH_TENANT_ID=taraz TARAZ_AUTH_AUDIENCE=tenant-service \
         uvicorn examples.demo_service:app --port 8099
 
     curl -H "Authorization: Bearer <token>" http://localhost:8099/whoami
@@ -23,6 +23,7 @@ def whoami(user=Depends(auth.principal)):
         "roles": sorted(user.roles),
         "service_account": user.is_service_account,
         "client_id": user.client_id,
+        "agent": user.is_agent,
     }
 
 
