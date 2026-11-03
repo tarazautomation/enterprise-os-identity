@@ -6,7 +6,7 @@ customers can share one Keycloak and one cluster. The realms are written from on
 | File | What it is |
 |---|---|
 | `template/realm.json` | The realm, with `{{...}}` where customers differ. Edit this to change every customer |
-| `tenants/<tenant>.json` | One customer: realm name, display name, Microsoft tenant and app, redirect addresses, the name of the variable holding its Microsoft secret |
+| `tenants/<tenant>.json` | One customer: realm name, display name, Microsoft tenant and app, redirect addresses, back-channel logout addresses (`backchannel_logout`: where Keycloak tells an app someone signed out), the name of the variable holding its Microsoft secret |
 | `access.json` | Who may call whom, and the roles each app's tokens carry. See below |
 | `render.py` | Writes `realm-<tenant>.json` for each tenant file |
 | `realm-<tenant>.json` | The result. Don't edit it by hand: CI fails if it doesn't match |
