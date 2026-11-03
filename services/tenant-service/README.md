@@ -30,6 +30,7 @@ Rules:
 - **Only `admin` and `process_owner` can be set.** Everyone gets `employee` through the realm's default role, and `agent` is for AI agents.
 - **The last admin can't be removed or disabled,** and nobody can disable themselves.
 - **Disabling someone also ends their sessions.**
+- **Leavers are turned off automatically** when the leavers' sync is configured: every 15 minutes it reads the company's Microsoft users and disables, and signs out, every member whose Microsoft account is disabled or deleted. It never turns anyone back on, and changes nothing if more than `ENTRA_SYNC_MAX_DISABLE` would go at once (`tenant_service/entra.py`).
 - **Every change is recorded** in the member's history, with who made it.
 
 Answers to bad requests: 401 (no, invalid, expired or wrong-tenant token), 403 (missing role), 404, 409 (last admin, self, duplicate invite), 422 (unknown role or app), 502 (Keycloak error).
@@ -48,6 +49,8 @@ Answers to bad requests: 401 (no, invalid, expired or wrong-tenant token), 403 (
 | `KEYCLOAK_INTERNAL_URL` | optional: `http://keycloak-service.identity.svc.cluster.local:8080`, the base URL for admin API and token calls when the issuer's address doesn't work from inside the service (in a pod, `localhost` is the pod). Defaults to the issuer's base. The issuer stays the public value that tokens are checked against |
 | `TARAZ_AUTH_TOKEN_URL` | optional: where this service gets its own token. Defaults to `<KEYCLOAK_INTERNAL_URL or issuer base>/realms/<realm>/protocol/openid-connect/token` |
 | `ADMIN_CLIENTS` | optional: the apps admins may change members from. Default `app-shell` |
+| `ENTRA_TENANT_ID` · `ENTRA_SYNC_CLIENT_ID` · `ENTRA_SYNC_CLIENT_SECRET` | the leavers' sync: the customer's Microsoft tenant, and a sync app there with the Graph application permission `User.Read.All` (admin consent). Leave unset to turn the sync off |
+| `ENTRA_SYNC_INTERVAL_SECONDS` · `ENTRA_SYNC_MAX_DISABLE` | optional: `900` and `5` |
 | `TARAZ_AUTH_SKIP_AUDIENCE_CHECK` | `true` only until the realm has been applied with audiences (`keycloak/README.md`) |
 
 One tenant-service runs per customer, with that customer's issuer and tenant.

@@ -226,13 +226,16 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
         rows = s.scalars(select(Agent).where(Agent.tenant_id == tenant_id).order_by(Agent.created_at.desc())).all()
         return [AgentOut.model_validate(a, from_attributes=True) for a in rows]
 
-    @r.get("/v1/status", response_model=SyncStatus, tags=["admin"], summary="Last sync with Keycloak and member counts")
+    @r.get("/v1/status", response_model=SyncStatus, tags=["admin"],
+           summary="Last syncs (Keycloak, leavers from Microsoft) and member counts")
     def status_(p: Principal = Depends(admin), s: Session = Depends(get_session)):
         counts = dict(s.execute(select(Member.status, func.count()).where(Member.tenant_id == tenant_id)
                                 .group_by(Member.status)).all())
         return SyncStatus(last_sync_at=state.get("at"), last_sync_ok=state.get("ok"), last_error=state.get("error"),
                           members_active=counts.get("active", 0), members_disabled=counts.get("disabled", 0),
-                          members_removed=counts.get("removed", 0))
+                          members_removed=counts.get("removed", 0),
+                          entra_sync_enabled=bool(state.get("entra_enabled")), entra_last_sync_at=state.get("entra_at"),
+                          entra_last_sync_ok=state.get("entra_ok"), entra_last_error=state.get("entra_error"))
 
     @r.post("/v1/sync", response_model=SyncStatus, tags=["admin"], summary="Sync with Keycloak now")
     def sync_now(p: Principal = Depends(admin), s: Session = Depends(get_session)):
