@@ -106,3 +106,7 @@ class SyncStatus(BaseModel):
     members_active: int
     members_disabled: int
     members_removed: int
+    entra_sync_enabled: bool = Field(description="Whether leavers are read from Microsoft (ENTRA_* settings)")
+    entra_last_sync_at: datetime | None
+    entra_last_sync_ok: bool | None
+    entra_last_error: str | None

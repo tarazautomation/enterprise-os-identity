@@ -26,6 +26,15 @@ class Settings:
     token_url: str | None = None    # optional internal address of the token endpoint
     admin_clients: frozenset[str] = frozenset({"app-shell"})   # apps an admin may change members from
     check_audience: bool = True     # tokens must be addressed to this service (its client id)
+    entra_tenant_id: str | None = None        # the leavers' sync (entra.py): the customer's Microsoft tenant
+    entra_client_id: str | None = None        # its sync app, with Microsoft Graph User.Read.All
+    entra_client_secret: str | None = None
+    entra_sync_interval_seconds: int = 900
+    entra_max_disable: int = 5                # more leavers than this in one run: change nothing, report it
+
+    @property
+    def entra_sync_enabled(self) -> bool:
+        return bool(self.entra_tenant_id and self.entra_client_id and self.entra_client_secret)
 
     @property
     def keycloak_base(self) -> str:
@@ -63,4 +72,9 @@ class Settings:
             token_url=env.get("TARAZ_AUTH_TOKEN_URL") or None,
             admin_clients=frozenset(c.strip() for c in env.get("ADMIN_CLIENTS", "app-shell").split(",") if c.strip()),
             check_audience=env.get("TARAZ_AUTH_SKIP_AUDIENCE_CHECK", "").lower() not in ("1", "true", "yes"),
+            entra_tenant_id=env.get("ENTRA_TENANT_ID") or None,
+            entra_client_id=env.get("ENTRA_SYNC_CLIENT_ID") or None,
+            entra_client_secret=env.get("ENTRA_SYNC_CLIENT_SECRET") or None,
+            entra_sync_interval_seconds=int(env.get("ENTRA_SYNC_INTERVAL_SECONDS", "900")),
+            entra_max_disable=int(env.get("ENTRA_SYNC_MAX_DISABLE", "5")),
         )

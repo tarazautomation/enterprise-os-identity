@@ -1,4 +1,5 @@
-"""Builds the FastAPI app: database, Keycloak client, token checks, background sync."""
+"""Builds the FastAPI app: database, Keycloak client, token checks, background syncs (Keycloak, and leavers from
+Microsoft when configured)."""
 
 import asyncio
 import logging
@@ -16,6 +17,7 @@ from taraz_auth.fastapi import FastAPIAuth
 from . import __version__
 from .api import build_router
 from .config import Settings
+from .entra import GraphUsers, disable_leavers
 from .keycloak_admin import KeycloakAdmin, KeycloakError
 from .sync import seed, sync_all
 
@@ -32,11 +34,14 @@ def make_engine(url: str):
 
 
 def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = None, engine=None,
-               run_sync_loop: bool = True) -> FastAPI:
+               run_sync_loop: bool = True, graph: GraphUsers | None = None) -> FastAPI:
     engine = engine or make_engine(settings.database_url)
     SessionLocal = sessionmaker(engine, expire_on_commit=False)
     holder = {"kc": kc}
-    state: dict = {"at": None, "ok": None, "error": None}
+    state: dict = {"at": None, "ok": None, "error": None,
+                   "entra_enabled": settings.entra_sync_enabled, "entra_at": None, "entra_ok": None, "entra_error": None}
+    if graph is None and settings.entra_sync_enabled:
+        graph = GraphUsers(settings.entra_tenant_id, settings.entra_client_id, settings.entra_client_secret)
 
     def get_kc():
         if holder["kc"] is None:
@@ -64,13 +69,34 @@ def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = 
                 log.warning("sync failed: %s", e)
             await asyncio.sleep(settings.sync_interval_seconds)
 
+    def run_entra():
+        with SessionLocal() as s:
+            res = disable_leavers(s, get_kc(), settings.tenant_id, graph.accounts(), settings.entra_max_disable)
+        state.update(entra_at=res.at, entra_ok=True, entra_error=None)
+        return res
+
+    async def entra_loop():
+        while True:
+            try:
+                res = await run_in_threadpool(run_entra)
+                if res.disabled:
+                    log.info("leavers: %d disabled because Microsoft disabled or deleted them", len(res.disabled))
+            except Exception as e:                     # keep running; report through /v1/status
+                state.update(entra_ok=False, entra_error=str(e)[:300])
+                log.warning("leavers' sync failed: %s", e)
+            await asyncio.sleep(settings.entra_sync_interval_seconds)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         with SessionLocal() as s:
             seed(s, settings.tenant_id, settings.tenant_name)
-        task = asyncio.create_task(sync_loop()) if run_sync_loop else None
+        tasks = []
+        if run_sync_loop:
+            tasks.append(asyncio.create_task(sync_loop()))
+            if graph is not None:
+                tasks.append(asyncio.create_task(entra_loop()))
         yield
-        if task:
+        for task in tasks:
             task.cancel()
 
     app = FastAPI(title="Enterprise OS tenant service", version=__version__, lifespan=lifespan,
@@ -82,6 +108,7 @@ def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = 
     auth = FastAPIAuth(verifier or TokenVerifier(settings.issuer, settings.tenant_id, audience=audience,
                                                  jwks_url=settings.jwks_url))
     app.include_router(build_router(auth, get_session, get_kc, settings.tenant_id, state, settings.admin_clients))
+    app.state.session_factory = SessionLocal
 
     @app.exception_handler(KeycloakError)
     async def keycloak_error(_, exc: KeycloakError):

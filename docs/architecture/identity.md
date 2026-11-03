@@ -166,6 +166,12 @@ The realm files contain no secrets and no signing keys. Keycloak generates keys 
 - [ ] Add staging and production redirect URIs to the Entra app and to each client once the domains exist (P2.1).
 - [x] Sending people straight to Microsoft is now set per tenant (`microsoft_first` in its tenant file). On for Taraz.
 
+## Leavers (decided 2026-11-03)
+
+Microsoft doesn't tell Keycloak when someone leaves. tenant-service's leavers' sync reads the company's Microsoft users through Microsoft Graph every 15 minutes and disables, and signs out, every member whose Microsoft account is disabled or deleted. People removed from the Entra app's assignment but still enabled in Microsoft aren't covered yet: disable the account in Microsoft, or in the admin portal.
+
+Each customer needs a second Entra app for it, with the Graph application permission `User.Read.All` and admin consent (tenant-service README, settings).
+
 ## Operating targets (decided 2026-11-03)
 
 | | Railway (now) | EKS production |
