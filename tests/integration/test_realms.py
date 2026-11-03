@@ -76,8 +76,20 @@ def create_user(admin, realm: str, roles=(), password: str | None = None) -> tup
 
 def form_action(page: str) -> str:
     m = re.search(r'<form[^>]*\baction="([^"]+)"', page)
-    assert m, page[:800]
+    assert m, what_page(page)
     return html.unescape(m.group(1))
+
+
+def what_page(page: str) -> str:
+    """A Keycloak page's title and message, for a readable failure."""
+    title = re.search(r'id="kc-page-title"[^>]*>\s*([^<]+)', page)
+    message = re.search(r'class="[^"]*(?:kc-feedback-text|alert__title|pf-m-danger)[^"]*"[^>]*>\s*([^<]+)', page)
+    return f"page: {title.group(1).strip() if title else '?'}; message: {message.group(1).strip() if message else '-'}"
+
+
+def cookies(h: httpx.Client) -> dict:
+    """Keycloak marks its sign-in cookies Secure, and httpx won't send those to http://localhost by itself."""
+    return {"Cookie": "; ".join(f"{c.name}={c.value}" for c in h.cookies.jar)}
 
 
 def sign_in(realm: str, client_id: str, redirect_uri: str, username: str, password: str) -> str:
@@ -88,10 +100,11 @@ def sign_in(realm: str, client_id: str, redirect_uri: str, username: str, passwo
         page = h.get(f"{issuer(realm)}/protocol/openid-connect/auth", follow_redirects=True, params={
             "client_id": client_id, "response_type": "code", "scope": "openid", "redirect_uri": redirect_uri,
             "state": "ci", "code_challenge": challenge, "code_challenge_method": "S256"})
-        r = h.post(form_action(page.text), data={"username": username, "password": password, "credentialId": ""})
+        r = h.post(form_action(page.text), headers=cookies(h),
+                   data={"username": username, "password": password, "credentialId": ""})
         if r.status_code == 200 and 'name="accept"' in r.text:              # the consent screen
-            r = h.post(form_action(r.text), data={"accept": "Yes"})
-        assert r.status_code in (302, 303), r.text[:800]
+            r = h.post(form_action(r.text), headers=cookies(h), data={"accept": "Yes"})
+        assert r.status_code in (302, 303), what_page(r.text)
         code = parse_qs(urlparse(r.headers["location"]).query)["code"][0]
         t = h.post(f"{issuer(realm)}/protocol/openid-connect/token", data={
             "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
