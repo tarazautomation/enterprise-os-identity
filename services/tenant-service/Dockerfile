@@ -13,4 +13,6 @@ RUN pip install "/src/taraz-auth[fastapi]" /app \
 USER app
 EXPOSE 8080
 # Migrations run before each deploy (Railway pre-deploy / a Kubernetes Job): alembic upgrade head
-CMD ["sh", "-c", "exec uvicorn tenant_service.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*'"]
+# FORWARDED_ALLOW_IPS: the proxy addresses whose X-Forwarded-* headers are trusted. Set it to the proxy's range
+# where it's known (Kubernetes); Railway's edge has no fixed range, hence the default.
+CMD ["sh", "-c", "exec uvicorn tenant_service.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-*}\""]

@@ -21,6 +21,8 @@ class Settings:
     client_secret: str
     database_url: str
     sync_interval_seconds: int = 30
+    sync_max_remove: int = 5        # more members missing from Keycloak than this in one sync: change nothing, report it
+    docs_enabled: bool = False      # /docs, /redoc and /openapi.json; off in production (the API is in openapi.json)
     jwks_url: str | None = None     # optional internal address for Keycloak's public keys
     keycloak_internal_url: str | None = None   # optional internal base URL for admin and token calls
     token_url: str | None = None    # optional internal address of the token endpoint
@@ -67,6 +69,8 @@ class Settings:
             client_secret=env["TARAZ_AUTH_CLIENT_SECRET"],
             database_url=normalize_db_url(env["DATABASE_URL"]),
             sync_interval_seconds=int(env.get("SYNC_INTERVAL_SECONDS", "30")),
+            sync_max_remove=int(env.get("SYNC_MAX_REMOVE", "5")),
+            docs_enabled=env.get("DOCS_ENABLED", "").lower() in ("1", "true", "yes"),
             jwks_url=env.get("TARAZ_AUTH_JWKS_URL") or None,
             keycloak_internal_url=env.get("KEYCLOAK_INTERNAL_URL") or None,
             token_url=env.get("TARAZ_AUTH_TOKEN_URL") or None,

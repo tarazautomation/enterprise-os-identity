@@ -18,7 +18,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Member, MemberEvent, utcnow
+from .history import recorded
+from .models import Member, utcnow
 from .sync import sync_one
 
 LOGIN = "https://login.microsoftonline.com"
@@ -83,10 +84,10 @@ def disable_leavers(session: Session, kc, tenant_id: str, accounts: dict[str, bo
                          "nothing changed")
     res = LeaverResult(checked=len(members))
     for m, reason in leavers:
-        kc.set_enabled(m.id, False)
-        kc.logout(m.id)
-        session.add(MemberEvent(tenant_id=tenant_id, member_id=m.id, action="disabled_by_microsoft",
-                                detail={"reason": reason}))
-        sync_one(session, kc, tenant_id, m.id)           # commits the event with the new status
-        res.disabled.append(m.id)
+        member_id = m.id
+        with recorded(session, tenant_id, member_id, "disabled_by_microsoft", {"reason": reason}):
+            kc.set_enabled(member_id, False)
+            kc.logout(member_id)
+            sync_one(session, kc, tenant_id, member_id)
+        res.disabled.append(member_id)
     return res

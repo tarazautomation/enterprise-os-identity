@@ -26,9 +26,11 @@ class KeycloakAdmin:
         tokens = ServiceTokenProvider(settings.token_endpoint, settings.client_id, settings.client_secret)
         return cls(settings.keycloak_base, settings.realm, httpx.Client(auth=tokens.httpx_auth(), timeout=15))
 
-    def _call(self, method: str, path: str, **kw) -> Any:
+    def _call(self, method: str, path: str, *, missing_ok: bool = False, **kw) -> Any:
+        """One admin API call. A 404 is None only where the caller asks for it (one user, one role): a 404 on a
+        listing means the realm itself is missing (a new or restored database), and must not read as "nobody"."""
         r = self._http.request(method, self._prefix + path, **kw)
-        if r.status_code == 404 and method == "GET":
+        if r.status_code == 404 and missing_ok:
             return None
         if r.status_code >= 400:
             raise KeycloakError(f"Keycloak {method} {path}: HTTP {r.status_code} {r.text[:200]}")
@@ -37,7 +39,9 @@ class KeycloakAdmin:
     def _pages(self, path: str, **params):
         first = 0
         while True:
-            page = self._call("GET", path, params={**params, "first": first, "max": 100}) or []
+            page = self._call("GET", path, params={**params, "first": first, "max": 100})
+            if not isinstance(page, list):
+                raise KeycloakError(f"Keycloak GET {path}: expected a list")
             yield from page
             if len(page) < 100:
                 return
@@ -47,11 +51,10 @@ class KeycloakAdmin:
 
     def list_users(self) -> list[dict]:
         """Every real user in the realm (service accounts left out)."""
-        return [u for u in self._pages("/users", briefRepresentation="false")
-                if not u.get("serviceAccountClientId") and not u.get("username", "").startswith("service-account-")]
+        return [u for u in self._pages("/users", briefRepresentation="false") if not u.get("serviceAccountClientId")]
 
     def get_user(self, user_id: str) -> dict | None:
-        return self._call("GET", f"/users/{user_id}")
+        return self._call("GET", f"/users/{user_id}", missing_ok=True)
 
     def role_member_ids(self, role: str) -> set[str]:
         """Ids of users holding this realm role directly."""
@@ -59,13 +62,13 @@ class KeycloakAdmin:
 
     def user_realm_roles(self, user_id: str) -> set[str]:
         """Effective realm roles of one user (including those from the default role)."""
-        return {r["name"] for r in (self._call("GET", f"/users/{user_id}/role-mappings/realm/composite") or [])}
+        return {r["name"] for r in self._call("GET", f"/users/{user_id}/role-mappings/realm/composite")}
 
     # --- writes ---
 
     def _role(self, name: str) -> dict:
         if name not in self._role_cache:
-            rep = self._call("GET", f"/roles/{name}")
+            rep = self._call("GET", f"/roles/{name}", missing_ok=True)
             if rep is None:
                 raise KeycloakError(f"realm role {name!r} doesn't exist")
             self._role_cache[name] = {"id": rep["id"], "name": rep["name"]}

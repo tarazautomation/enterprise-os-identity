@@ -6,11 +6,14 @@ Who may call what:
 - admins, from the admin portal only (ADMIN_CLIENTS): change roles, disable/enable, invites, agents,
   change history, sync
 Every request's token is checked by taraz-auth (signature, issuer, expiry, audience, tenant).
+Every change is recorded before it's made (history.py), and changes that touch admins hold the "admins" lock, so
+the last-admin rule holds when two admins act at once.
 
 App access is kept in the database but not offered here until apps enforce it (an "apps" claim in tokens).
 """
 
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
@@ -20,10 +23,11 @@ from sqlalchemy.orm import Session
 from taraz_auth import Principal
 from taraz_auth.fastapi import FastAPIAuth
 
+from .history import recorded
 from .models import EDITABLE_ROLES, ROLES, Agent, App, Invite, Member, MemberEvent, MemberRole, Tenant, utcnow
 from .schemas import (AgentOut, EventOut, InviteIn, InviteOut, MemberList, MemberOut, MemberSummary, RoleOut, RolesIn,
                       SyncStatus, TenantOut)
-from .sync import sync_all, sync_one
+from .sync import TooManyRemovals, sync_all, sync_one
 
 INVITE_DAYS = 14
 
@@ -33,8 +37,10 @@ def _aware(dt: datetime) -> datetime:
 
 
 def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, tenant_id: str, state: dict,
-                 admin_clients: frozenset[str] = frozenset({"app-shell"})) -> APIRouter:
+                 admin_clients: frozenset[str] = frozenset({"app-shell"}), locks=None,
+                 sync_max_remove: int = 5) -> APIRouter:
     r = APIRouter()
+    hold = locks.hold if locks else (lambda name: nullcontext())
 
     # --- who may call ---
 
@@ -61,6 +67,9 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
 
     def actor(p: Principal) -> dict:
         return {"actor_id": p.subject, "actor_name": p.name or p.username}
+
+    def record(s: Session, p: Principal, member_id: str, action: str, detail: dict | None = None):
+        return recorded(s, tenant_id, member_id, action, detail, **actor(p))
 
     def member_or_404(s: Session, member_id: str) -> Member:
         m = s.get(Member, member_id)
@@ -131,20 +140,19 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
                                       "message": f"only {sorted(EDITABLE_ROLES)} can be set here; not {sorted(bad)}"})
         member_or_404(s, member_id)
         kc = get_kc()
-        current = kc.user_realm_roles(member_id) & EDITABLE_ROLES     # Keycloak is the master copy
-        want = set(body.roles)
-        add, remove = want - current, current - want
-        if "admin" in remove:
-            guard_last_admin(member_id)
-        kc.add_roles(member_id, add)
-        kc.remove_roles(member_id, remove)
-        m = sync_one(s, kc, tenant_id, member_id)
+        with hold("admins"):
+            current = kc.user_realm_roles(member_id) & EDITABLE_ROLES     # Keycloak is the master copy
+            want = set(body.roles)
+            add, remove = want - current, current - want
+            if "admin" in remove:
+                guard_last_admin(member_id)
+            if add or remove:
+                with record(s, p, member_id, "roles_changed", {"added": sorted(add), "removed": sorted(remove)}):
+                    kc.add_roles(member_id, add)
+                    kc.remove_roles(member_id, remove)
+        m = sync_one(s, kc, tenant_id, member_id, record_roles=False)      # recorded above, with who made it
         if m is None:
             raise HTTPException(404, {"error": "not_found", "message": "member no longer exists in Keycloak"})
-        if add or remove:
-            s.add(MemberEvent(tenant_id=tenant_id, member_id=member_id, action="roles_changed",
-                              detail={"added": sorted(add), "removed": sorted(remove)}, **actor(p)))
-            s.commit()
         return MemberOut.of(m)
 
     @r.post("/v1/members/{member_id}/disable", response_model=MemberOut, tags=["admin"],
@@ -154,26 +162,24 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
             raise HTTPException(409, {"error": "self", "message": "you can't disable yourself"})
         member_or_404(s, member_id)
         kc = get_kc()
-        if "admin" in kc.user_realm_roles(member_id):
-            guard_last_admin(member_id)
-        kc.set_enabled(member_id, False)
-        kc.logout(member_id)
-        m = sync_one(s, kc, tenant_id, member_id)
-        s.add(MemberEvent(tenant_id=tenant_id, member_id=member_id, action="disabled", detail={}, **actor(p)))
-        s.commit()
-        return MemberOut.of(m)
+        with hold("admins"):
+            if "admin" in kc.user_realm_roles(member_id):
+                guard_last_admin(member_id)
+            with record(s, p, member_id, "disabled"):
+                kc.set_enabled(member_id, False)
+                kc.logout(member_id)
+        return MemberOut.of(sync_one(s, kc, tenant_id, member_id) or member_or_404(s, member_id))
 
     @r.post("/v1/members/{member_id}/enable", response_model=MemberOut, tags=["admin"])
     def enable(member_id: str, p: Principal = Depends(admin), s: Session = Depends(get_session)):
         member_or_404(s, member_id)
         kc = get_kc()
-        kc.set_enabled(member_id, True)
-        m = sync_one(s, kc, tenant_id, member_id)
-        s.add(MemberEvent(tenant_id=tenant_id, member_id=member_id, action="enabled", detail={}, **actor(p)))
-        s.commit()
-        return MemberOut.of(m)
+        with record(s, p, member_id, "enabled"):
+            kc.set_enabled(member_id, True)
+        return MemberOut.of(sync_one(s, kc, tenant_id, member_id) or member_or_404(s, member_id))
 
-    @r.get("/v1/members/{member_id}/events", response_model=list[EventOut], tags=["admin"], summary="A member's change history")
+    @r.get("/v1/members/{member_id}/events", response_model=list[EventOut], tags=["admin"],
+           summary="A member's change history (an invite's: invite:<invite id>)")
     def events(member_id: str, p: Principal = Depends(admin), s: Session = Depends(get_session)):
         rows = s.scalars(select(MemberEvent).where(MemberEvent.tenant_id == tenant_id, MemberEvent.member_id == member_id)
                          .order_by(MemberEvent.id.desc()).limit(200)).all()
@@ -197,6 +203,8 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
         inv = Invite(id=str(uuid.uuid4()), tenant_id=tenant_id, email=body.email, roles=sorted(set(body.roles)), apps=apps,
                      invited_by=p.subject, status="pending", created_at=now, expires_at=now + timedelta(days=INVITE_DAYS))
         s.add(inv)
+        s.add(MemberEvent(tenant_id=tenant_id, member_id=f"invite:{inv.id}", action="invited",
+                          detail={"email": inv.email, "roles": inv.roles}, **actor(p)))
         s.commit()
         return InviteOut.model_validate(inv, from_attributes=True)
 
@@ -215,7 +223,10 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
         inv = s.get(Invite, invite_id)
         if inv is None or inv.tenant_id != tenant_id:
             raise HTTPException(404, {"error": "not_found", "message": "no such invite"})
-        inv.status = "revoked"
+        if inv.status != "revoked":
+            inv.status = "revoked"
+            s.add(MemberEvent(tenant_id=tenant_id, member_id=f"invite:{inv.id}", action="invite_revoked",
+                              detail={"email": inv.email}, **actor(p)))
         s.commit()
         return InviteOut.model_validate(inv, from_attributes=True)
 
@@ -238,8 +249,19 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
                           entra_last_sync_ok=state.get("entra_ok"), entra_last_error=state.get("entra_error"))
 
     @r.post("/v1/sync", response_model=SyncStatus, tags=["admin"], summary="Sync with Keycloak now")
-    def sync_now(p: Principal = Depends(admin), s: Session = Depends(get_session)):
-        res = sync_all(s, get_kc(), tenant_id)
+    def sync_now(p: Principal = Depends(admin), s: Session = Depends(get_session),
+                 allow_removals: bool = Query(False, description="Apply it even if more than SYNC_MAX_REMOVE members "
+                                                                 "would be removed (they really left)")):
+        with hold("sync"):
+            try:
+                res = sync_all(s, get_kc(), tenant_id, sync_max_remove, allow_removals)
+            except TooManyRemovals as e:
+                state.update(ok=False, error=str(e)[:300])
+                raise HTTPException(409, {"error": "too_many_removals", "message": str(e)}) from None
+        if allow_removals and res.removed:
+            s.add(MemberEvent(tenant_id=tenant_id, member_id="sync", action="removals_allowed",
+                              detail={"removed": res.removed}, **actor(p)))
+            s.commit()
         state.update(at=res.at, ok=True, error=None)
         return status_(p, s)
 
