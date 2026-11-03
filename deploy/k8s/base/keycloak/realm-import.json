@@ -62,7 +62,6 @@
       "quickLoginCheckMilliSeconds": 1000,
       "maxDeltaTimeSeconds": 43200,
       "failureFactor": 10,
-      "maxSecondaryAuthFailures": 0,
       "roles": {
         "realm": [
           {
@@ -461,7 +460,6 @@
       "webAuthnPolicyAttestationConveyancePreference": "not specified",
       "webAuthnPolicyAuthenticatorAttachment": "not specified",
       "webAuthnPolicyRequireResidentKey": "not specified",
-      "webAuthnPolicyResidentKey": "not specified",
       "webAuthnPolicyUserVerificationRequirement": "not specified",
       "webAuthnPolicyCreateTimeout": 0,
       "webAuthnPolicyAvoidSameAuthenticatorRegister": false,
@@ -476,7 +474,6 @@
       "webAuthnPolicyPasswordlessAttestationConveyancePreference": "not specified",
       "webAuthnPolicyPasswordlessAuthenticatorAttachment": "not specified",
       "webAuthnPolicyPasswordlessRequireResidentKey": "not specified",
-      "webAuthnPolicyPasswordlessResidentKey": "required",
       "webAuthnPolicyPasswordlessUserVerificationRequirement": "required",
       "webAuthnPolicyPasswordlessCreateTimeout": 0,
       "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegister": false,
@@ -2320,14 +2317,7 @@
             "sendIdTokenOnLogout": "true",
             "passMaxAge": "false",
             "disableTypeClaimCheck": "false"
-          },
-          "types": [
-            "USER_AUTHENTICATION",
-            "CLIENT_ASSERTION",
-            "TRUST_MATERIAL",
-            "EXCHANGE_EXTERNAL_TOKEN",
-            "JWT_AUTHORIZATION_GRANT"
-          ]
+          }
         }
       ],
       "identityProviderMappers": [
@@ -3373,7 +3363,6 @@
       "organizationsEnabled": false,
       "verifiableCredentialsEnabled": false,
       "adminPermissionsEnabled": false,
-      "scimApiEnabled": false,
       "clientProfiles": {
         "profiles": []
       },

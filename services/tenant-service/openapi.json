@@ -76,24 +76,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Admins and services only",
               "title": "Role"
-            }
-          },
-          {
-            "name": "app",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "App"
-            }
+            },
+            "description": "Admins and services only"
           },
           {
             "name": "status",
@@ -102,9 +88,11 @@
             "schema": {
               "type": "string",
               "pattern": "^(active|disabled|removed|all)$",
+              "description": "Other than active: admins and services only",
               "default": "active",
               "title": "Status"
-            }
+            },
+            "description": "Other than active: admins and services only"
           },
           {
             "name": "limit",
@@ -183,7 +171,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemberOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MemberOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MemberSummary"
+                    }
+                  ],
+                  "title": "Response Member V1 Members  Member Id  Get"
                 }
               }
             }
@@ -219,36 +215,6 @@
                   },
                   "type": "array",
                   "title": "Response Roles V1 Roles Get"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/v1/apps": {
-      "get": {
-        "tags": [
-          "directory"
-        ],
-        "summary": "Apps",
-        "operationId": "apps_v1_apps_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AppOut"
-                  },
-                  "type": "array",
-                  "title": "Response Apps V1 Apps Get"
                 }
               }
             }
@@ -316,63 +282,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RolesIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MemberOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/members/{member_id}/apps": {
-      "put": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "Set the apps a member may use",
-        "operationId": "put_apps_v1_members__member_id__apps_put",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "member_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Member Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AppsIn"
               }
             }
           }
@@ -799,46 +708,6 @@
         ],
         "title": "AgentOut"
       },
-      "AppOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "default_enabled": {
-            "type": "boolean",
-            "title": "Default Enabled"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "default_enabled"
-        ],
-        "title": "AppOut"
-      },
-      "AppsIn": {
-        "properties": {
-          "apps": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Apps",
-            "description": "The apps this member may use after the change (ids from GET /v1/apps)"
-          }
-        },
-        "type": "object",
-        "required": [
-          "apps"
-        ],
-        "title": "AppsIn"
-      },
       "EventOut": {
         "properties": {
           "action": {
@@ -914,21 +783,6 @@
             "type": "array",
             "title": "Roles",
             "default": []
-          },
-          "apps": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Apps",
-            "description": "Omit to give the default apps"
           }
         },
         "type": "object",
@@ -954,13 +808,6 @@
             "type": "array",
             "title": "Roles"
           },
-          "apps": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Apps"
-          },
           "invited_by": {
             "type": "string",
             "title": "Invited By"
@@ -985,7 +832,6 @@
           "id",
           "email",
           "roles",
-          "apps",
           "invited_by",
           "status",
           "created_at",
@@ -1001,10 +847,18 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/MemberOut"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MemberOut"
+                },
+                {
+                  "$ref": "#/components/schemas/MemberSummary"
+                }
+              ]
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "MemberOut for admins and services, MemberSummary for everyone else"
           }
         },
         "type": "object",
@@ -1074,13 +928,6 @@
             "type": "array",
             "title": "Roles"
           },
-          "apps": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Apps"
-          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -1102,11 +949,42 @@
           "last_name",
           "status",
           "roles",
-          "apps",
           "created_at",
           "updated_at"
         ],
         "title": "MemberOut"
+      },
+      "MemberSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Keycloak user id; the same as 'sub' in the member's tokens"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "title": "MemberSummary",
+        "description": "What members who aren't admins see about each other."
       },
       "RoleOut": {
         "properties": {

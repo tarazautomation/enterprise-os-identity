@@ -14,9 +14,9 @@ One sign-in for every Enterprise OS app. Keycloak issues the tokens; Microsoft 3
 
 Keycloak never sees Microsoft passwords.
 
-## Realm `taraz`
+## Realms: one per customer
 
-One realm per customer organisation; each organisation gets its own cluster. Taraz is the first.
+One realm per customer organisation, written from one template (`keycloak/README.md`). Customers can share a cluster and a Keycloak; each has its own users, keys, roles and Microsoft sign-in. Taraz is the first (realm `taraz`). Decided 2026-11-03, replacing "each organisation gets its own cluster".
 
 ### Microsoft 365 (Entra ID)
 
@@ -82,7 +82,15 @@ More backend services are added as the service catalogue (P0.2) settles. The loc
 
 The client scope `entra` adds the Microsoft user ID (`entra_oid`) and tenant ID (`entra_tid`) to ID and access tokens. Only `scribe` includes it (added 2026-10-21), because Scribe matches its existing users on the Microsoft ID; add it to any other app that needs to know a person's Microsoft account.
 
-Every client includes the shared client scope `tenant` (realm default), which writes `tenant_id` into ID and access tokens. The value is fixed per realm (`taraz`), because one realm is one tenant. Service-account tokens (service-to-service calls) therefore carry it too; a mapper reading a user attribute missed them. Changed 2026-10-19 for P2.3. The `tenant_id` user attribute is still stored on sign-in, for reference.
+Every client includes the shared client scope `tenant` (realm default), which writes `tenant_id` into ID and access tokens. The value is fixed per realm (the realm's name), because one realm is one tenant.
+
+### Audiences (decided 2026-11-03)
+
+Each service accepts only tokens addressed to it (`aud`). `keycloak/access.json` lists which client may call which; it becomes each client's audiences. Clients carry only the roles mapped to them (`fullScopeAllowed` off): people's apps carry `employee`, `process_owner` and `admin`, agents never `admin`, service accounts none. tenant-service accepts member changes only from the admin portal (`app-shell`).
+
+### Agents (decided 2026-11-03)
+
+An agent signs in for a person through `external-agents`; its token is addressed to `mcp-server` only. `mcp-server` exchanges it (OAuth token exchange) for a token addressed to the service it calls, for the same person. Services recognise agents by the client (`azp` is `external-agents` or `mcp-server`), not by a role. The `agent` realm role is no longer used. Service-account tokens (service-to-service calls) therefore carry it too; a mapper reading a user attribute missed them. Changed 2026-10-19 for P2.3. The `tenant_id` user attribute is still stored on sign-in, for reference.
 
 ### Hardening set in the realm file (2026-11-02)
 
@@ -127,17 +135,15 @@ What every service checks (the P2.3 auth library does this):
 3. `tenant_id` matches the cluster's tenant. Refuse otherwise.
 4. The roles in `realm_access.roles` allow the action.
 
-**Open decision (P2.3):** tokens carry `aud: account` today. Decide whether each service only accepts tokens addressed to it, which means adding audience mappers per client.
+Each service also checks that its own client id is in `aud` (decided 2026-11-03, see Audiences).
 
 ## Secrets and import
 
-`realm-taraz.json` contains no secrets and no signing keys. Keycloak generates fresh keys on import. Secrets are placeholders filled from environment variables:
-
-`KC_ENTRA_CLIENT_SECRET`, `KC_CLIENT_SECRET_SCRIBE`, `KC_CLIENT_SECRET_KNOWLEDGE_BASE`, `KC_CLIENT_SECRET_LECTRA`, `KC_CLIENT_SECRET_MCP_SERVER`, `KC_CLIENT_SECRET_TENANT_SERVICE`, `KC_CLIENT_SECRET_STORAGE_SERVICE`, `KC_CLIENT_SECRET_AUDIT_LOG`
+The realm files contain no secrets and no signing keys. Keycloak generates keys and each client's secret. The one placeholder is the Microsoft secret, `$(env:KC_ENTRA_CLIENT_SECRET)` for Taraz, filled in when keycloak-config-cli applies the realm (`keycloak/README.md`).
 
 - **Locally:** run `start-dev --import-realm` with the file in `/opt/keycloak/data/import` and those variables set. Checked 2026-10-19: a fresh Keycloak 26.8.1 loaded all 10 clients, the 4 roles, the Microsoft provider with its 4 mappers, and the admin one-time-code flow.
 - **On EKS (P2.1):** use the Keycloak Operator's `KeycloakRealmImport`, with `spec.placeholders` pointing at a Kubernetes Secret in namespace `identity` (fed by External Secrets from AWS Secrets Manager).
-- **Watch out:** a realm import only creates a realm and never updates an existing one. Later changes need `keycloak-config-cli` or a re-import job.
+- **Existing realms** are changed with keycloak-config-cli: the "apply realms" workflow (`keycloak/README.md`). A realm import only creates.
 
 ## Moving the existing apps onto Keycloak (P2.7)
 
@@ -156,6 +162,25 @@ What every service checks (the P2.3 auth library does this):
 - [x] A one-time code for admins (done 2026-10-19).
 - [ ] Replace the Entra secret that was exposed in chat: new secrets for Keycloak and Scribe, then delete the old one.
 - [ ] Linking Keycloak users to Odoo users, so Claude acting in Odoo is the real person (P2.5, with Subhan's MCP server).
-- [ ] The audience decision for P2.3 (above).
+- [x] The audience decision for P2.3 (decided 2026-11-03: each service checks).
 - [ ] Add staging and production redirect URIs to the Entra app and to each client once the domains exist (P2.1).
-- [ ] Sending people straight to Microsoft (the Identity Provider Redirector's default provider `entra`) is set by hand on Railway but not in `realm-taraz.json`, so a fresh import shows Keycloak's own sign-in form first. Decide whether the file should set it too; locally, that form is how the test users sign in.
+- [x] Sending people straight to Microsoft is now set per tenant (`microsoft_first` in its tenant file). On for Taraz.
+
+## Operating targets (decided 2026-11-03)
+
+| | Railway (now) | EKS production |
+|---|---|---|
+| Data loss on a restore (RPO) | up to 24 hours: daily backups of Keycloak's and tenant-service's Postgres | up to 5 minutes: RDS point-in-time recovery, Multi-AZ |
+| Sign-in back after an outage (RTO) | 4 hours | 1 hour |
+| Restore drill | every quarter: restore into a scratch database and sign in | same |
+
+A restore must keep Keycloak's user ids: tenant-service and the apps store them.
+
+Keycloak security releases: **critical within 72 hours, high within 7 days, others within 30 days.** Watch the advisories on `keycloak/keycloak` (GitHub "Security alerts" for that repository). Upgrade the image in `deploy/railway`, `deploy/k8s` and the CI workflow together.
+
+## Admin access (decided 2026-11-03)
+
+- **One person** is the master-realm admin, with a password and authenticator app.
+- **A sealed break-glass login** in the master realm: a long random password and its own authenticator, kept in AWS Secrets Manager, used only if the admin is locked out or unavailable. Using it is an incident: say so, then change its password.
+- **Day-to-day realm changes** don't need a person: the "apply realms" workflow signs in as a master-realm service account (`keycloak/README.md`).
+- Each customer's own admins hold the `admin` role in their realm and work in the admin portal. That role can't reach Keycloak itself.
