@@ -80,6 +80,17 @@ def form_action(page: str) -> str:
     return html.unescape(m.group(1))
 
 
+def hidden_fields(page: str) -> dict:
+    """The form's hidden inputs, which Keycloak expects back (the consent screen's code, for one)."""
+    fields = {}
+    for tag in re.findall(r"<input[^>]*>", page):
+        if re.search(r'type="hidden"', tag):
+            name, value = re.search(r'name="([^"]*)"', tag), re.search(r'value="([^"]*)"', tag)
+            if name:
+                fields[html.unescape(name.group(1))] = html.unescape(value.group(1)) if value else ""
+    return fields
+
+
 def what_page(page: str) -> str:
     """A Keycloak page's title and message, for a readable failure."""
     title = re.search(r'id="kc-page-title"[^>]*>\s*([^<]+)', page)
@@ -101,11 +112,13 @@ def sign_in(realm: str, client_id: str, redirect_uri: str, username: str, passwo
             "client_id": client_id, "response_type": "code", "scope": "openid", "redirect_uri": redirect_uri,
             "state": "ci", "code_challenge": challenge, "code_challenge_method": "S256"})
         r = h.post(form_action(page.text), headers=cookies(h),
-                   data={"username": username, "password": password, "credentialId": ""})
+                   data={**hidden_fields(page.text), "username": username, "password": password})
         if r.status_code == 200 and 'name="accept"' in r.text:              # the consent screen
-            r = h.post(form_action(r.text), headers=cookies(h), data={"accept": "Yes"})
+            r = h.post(form_action(r.text), headers=cookies(h), data={**hidden_fields(r.text), "accept": "Yes"})
         assert r.status_code in (302, 303), what_page(r.text)
-        code = parse_qs(urlparse(r.headers["location"]).query)["code"][0]
+        query = parse_qs(urlparse(r.headers["location"]).query)
+        assert "code" in query, f"no code in the redirect: {query}"
+        code = query["code"][0]
         t = h.post(f"{issuer(realm)}/protocol/openid-connect/token", data={
             "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
             "client_id": client_id, "code_verifier": verifier})
@@ -203,3 +216,9 @@ def test_taraz_sends_people_straight_to_microsoft(admin):
     step = next(s for s in steps if s.get("providerId") == "identity-provider-redirector")
     config = admin.get(f"/taraz/authentication/config/{step['authenticationConfig']}").json()
     assert config["config"]["defaultProvider"] == "entra"
+
+
+def test_keycloak_tells_scribe_when_someone_signs_out(admin):
+    scribe = admin.get("/taraz/clients", params={"clientId": "scribe"}).json()[0]
+    assert scribe["attributes"]["backchannel.logout.url"].endswith("/auth/keycloak/backchannel-logout")
+    assert scribe["attributes"]["backchannel.logout.session.required"] == "true"

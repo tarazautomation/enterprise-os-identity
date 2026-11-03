@@ -12,6 +12,9 @@
     "scribe": ["https://web-production-ca083.up.railway.app/*", "https://scribe-staging.up.railway.app/*"],
     "scribe-desktop": ["http://127.0.0.1/*"]
   },
+  "backchannel_logout": {
+    "scribe": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
+  },
   "secrets": {
     "entra": "KC_ENTRA_CLIENT_SECRET"
   }

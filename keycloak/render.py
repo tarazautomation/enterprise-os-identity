@@ -9,7 +9,7 @@ Inputs:
   access.json          which app may call which (token audiences), which user roles each app's tokens carry,
                        which clients act for agents, and the admin API rights of tenant-service
   tenants/<id>.json    one customer: realm name, its Microsoft (Entra) tenant and app, redirect addresses,
-                       and the name of the environment variable holding its Microsoft secret
+                       back-channel logout addresses, and the name of the variable holding its Microsoft secret
 
 No secret is in any of these files. Client secrets are left to Keycloak, which generates one per client, and the
 Microsoft secret is written as $(env:NAME) for keycloak-config-cli to fill in when it applies the realm.
@@ -131,6 +131,11 @@ def render(template: dict, tenant: dict, access: dict) -> dict:
     realm = fill(copy.deepcopy(template), tenant)
     apply_access(realm, access)
     microsoft_first(realm, tenant.get("microsoft_first", False))
+    for cid, url in tenant.get("backchannel_logout", {}).items():
+        client = next((c for c in realm["clients"] if c["clientId"] == cid), None)
+        if client is None:
+            raise ValueError(f"backchannel_logout names {cid!r}, which isn't a client in the template")
+        client.setdefault("attributes", {})["backchannel.logout.url"] = url    # where Keycloak's logouts go
     leftover = TOKEN.search(json.dumps(realm))
     if leftover:
         raise ValueError(f"{leftover.group(0)} has no value")

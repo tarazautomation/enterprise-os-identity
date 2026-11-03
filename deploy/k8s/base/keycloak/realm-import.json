@@ -817,7 +817,8 @@
             "client.secret.creation.time": "1792391104",
             "backchannel.logout.session.required": "true",
             "post.logout.redirect.uris": "+",
-            "backchannel.logout.revoke.offline.tokens": "false"
+            "backchannel.logout.revoke.offline.tokens": "false",
+            "backchannel.logout.url": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
           },
           "authenticationFlowBindingOverrides": {},
           "fullScopeAllowed": false,
