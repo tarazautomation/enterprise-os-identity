@@ -1,0 +1,21 @@
+{
+  "realm": "taraz",
+  "display_name": "Taraz",
+  "microsoft_first": true,
+  "entra": {
+    "tenant_id": "9f1a1bc4-e5b7-4144-99b3-1f692eae04fd",
+    "client_id": "7b315648-cdc2-432c-93e8-2881346f886d"
+  },
+  "redirect_uris": {
+    "app-shell": ["http://localhost:3000/*", "http://localhost:5173/*"],
+    "knowledge-base": ["http://localhost:8000/*"],
+    "scribe": ["https://web-production-ca083.up.railway.app/*", "https://scribe-staging.up.railway.app/*"],
+    "scribe-desktop": ["http://127.0.0.1/*"]
+  },
+  "backchannel_logout": {
+    "scribe": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
+  },
+  "secrets": {
+    "entra": "KC_ENTRA_CLIENT_SECRET"
+  }
+}

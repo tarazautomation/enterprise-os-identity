@@ -35,7 +35,29 @@ On the Entra app ("Scribe Calendar Watcher", `7b315648-…`), the Web redirect U
 
 ## Admin access
 
-One master-realm admin, with a password and authenticator app. The bootstrap `temp-admin` was deleted.
+One master-realm admin, with a password and authenticator app, plus a sealed break-glass login (`docs/architecture/identity.md`, "Admin access"). The bootstrap `temp-admin` was deleted.
+
+**Delete `KC_BOOTSTRAP_ADMIN_USERNAME` and `KC_BOOTSTRAP_ADMIN_PASSWORD` from the `keycloak` service.** They were only for the first start.
+
+### Making the break-glass login
+
+1. In the master realm, add a user (for example `break-glass`), set a 40-character random password, and require an authenticator (Required user actions: Configure OTP).
+2. Sign in once in a private window, set up its authenticator, and give it the master realm role `admin`.
+3. Store the password and the authenticator's secret (or a recovery code) in AWS Secrets Manager, readable only by the people allowed to use it.
+4. Turn on brute-force protection and login events in the master realm too.
+
+### The service account for keycloak-config-cli
+
+In the master realm, add a confidential client `keycloak-config-cli` with only "Service accounts" on, give its service account the master realm role `admin`, and put its id and secret in the GitHub environment `keycloak-production` (`keycloak/README.md`).
+
+## Rolling out audiences (PR "A realm per customer")
+
+The realm changes put audiences and per-app roles in tokens. tenant-service then refuses tokens without its audience. Do these in order:
+
+1. Set `TARAZ_AUTH_SKIP_AUDIENCE_CHECK=true` on `tenant-service`.
+2. Merge. Railway deploys tenant-service with the new library.
+3. Run **apply realms** for `taraz`. It needs `KC_ENTRA_CLIENT_SECRET` in the GitHub environment.
+4. Check a token from each app has the audiences in `keycloak/access.json`, then remove `TARAZ_AUTH_SKIP_AUDIENCE_CHECK`.
 
 ## Moving off Railway
 

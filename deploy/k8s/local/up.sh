@@ -36,7 +36,7 @@ else
 fi
 
 step "4/6 realm secrets"
-bash "$HERE/create-app-secrets.sh"
+kubectl -n "$NS" get secret keycloak-realm-secrets >/dev/null 2>&1 || kubectl -n "$NS" create secret generic keycloak-realm-secrets >/dev/null
 if [ -z "$(kubectl -n "$NS" get secret keycloak-realm-secrets -o jsonpath='{.data.KC_ENTRA_CLIENT_SECRET}')" ]; then
   echo
   echo "The Microsoft (Entra) client secret is missing. Run this, paste the secret, then run up.sh again:"

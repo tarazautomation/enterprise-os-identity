@@ -21,7 +21,7 @@ def service_token():
 
 
 def test_real_service_token_is_accepted(service_token):
-    p = TokenVerifier(ISSUER, "taraz").verify(service_token)
+    p = TokenVerifier(ISSUER, "taraz", audience=None).verify(service_token)
     assert p.tenant_id == "taraz"
     assert p.is_service_account
     assert p.client_id == os.environ["TARAZ_AUTH_LIVE_CLIENT_ID"]
@@ -29,4 +29,4 @@ def test_real_service_token_is_accepted(service_token):
 
 def test_real_token_is_refused_by_another_tenants_service(service_token):
     with pytest.raises(WrongTenant):
-        TokenVerifier(ISSUER, "other-company").verify(service_token)
+        TokenVerifier(ISSUER, "other-company", audience=None).verify(service_token)

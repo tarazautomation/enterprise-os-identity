@@ -22,7 +22,6 @@ local/                      local k3d cluster only
   postgres.yaml             Postgres 16 (stands in for RDS)
   ingress.yaml              Traefik route (stands in for the Istio gateway)
   up.sh                     brings everything up; safe to re-run
-  create-app-secrets.sh     random client secrets for the 7 confidential apps
   set-entra-secret.sh       asks for the Microsoft secret with hidden typing and stores it
 tools/
   make-realm-import.py      realm-taraz.json -> base/keycloak/realm-import.json

@@ -24,6 +24,8 @@ class Settings:
     jwks_url: str | None = None     # optional internal address for Keycloak's public keys
     keycloak_internal_url: str | None = None   # optional internal base URL for admin and token calls
     token_url: str | None = None    # optional internal address of the token endpoint
+    admin_clients: frozenset[str] = frozenset({"app-shell"})   # apps an admin may change members from
+    check_audience: bool = True     # tokens must be addressed to this service (its client id)
 
     @property
     def keycloak_base(self) -> str:
@@ -59,4 +61,6 @@ class Settings:
             jwks_url=env.get("TARAZ_AUTH_JWKS_URL") or None,
             keycloak_internal_url=env.get("KEYCLOAK_INTERNAL_URL") or None,
             token_url=env.get("TARAZ_AUTH_TOKEN_URL") or None,
+            admin_clients=frozenset(c.strip() for c in env.get("ADMIN_CLIENTS", "app-shell").split(",") if c.strip()),
+            check_audience=env.get("TARAZ_AUTH_SKIP_AUDIENCE_CHECK", "").lower() not in ("1", "true", "yes"),
         )

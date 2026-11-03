@@ -1,9 +1,13 @@
 """HTTP API, version 1.
 
 Who may call what:
-- members of the company (any employee or admin) and other services: read the directory
-- admins: change roles and app access, disable/enable, invites, agents, change history, sync
-Every request's token is checked by taraz-auth (signature, issuer, expiry, tenant).
+- members of the company: read the directory. Admins and services see roles and status; everyone else sees
+  names and emails
+- admins, from the admin portal only (ADMIN_CLIENTS): change roles, disable/enable, invites, agents,
+  change history, sync
+Every request's token is checked by taraz-auth (signature, issuer, expiry, audience, tenant).
+
+App access is kept in the database but not offered here until apps enforce it (an "apps" claim in tokens).
 """
 
 import uuid
@@ -16,11 +20,10 @@ from sqlalchemy.orm import Session
 from taraz_auth import Principal
 from taraz_auth.fastapi import FastAPIAuth
 
-from .models import (EDITABLE_ROLES, ROLES, Agent, App, Invite, Member, MemberApp, MemberEvent, MemberRole,
-                     Tenant, utcnow)
-from .schemas import (AgentOut, AppOut, AppsIn, EventOut, InviteIn, InviteOut, MemberList, MemberOut, RoleOut,
-                      RolesIn, SyncStatus, TenantOut)
-from .sync import set_member_apps, sync_all, sync_one
+from .models import EDITABLE_ROLES, ROLES, Agent, App, Invite, Member, MemberEvent, MemberRole, Tenant, utcnow
+from .schemas import (AgentOut, EventOut, InviteIn, InviteOut, MemberList, MemberOut, MemberSummary, RoleOut, RolesIn,
+                      SyncStatus, TenantOut)
+from .sync import sync_all, sync_one
 
 INVITE_DAYS = 14
 
@@ -29,7 +32,8 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, tenant_id: str, state: dict) -> APIRouter:
+def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, tenant_id: str, state: dict,
+                 admin_clients: frozenset[str] = frozenset({"app-shell"})) -> APIRouter:
     r = APIRouter()
 
     # --- who may call ---
@@ -39,7 +43,21 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
             return p
         raise HTTPException(403, {"error": "insufficient_role", "message": "only members of this company and services"})
 
-    admin = auth.require("admin")
+    require_admin = auth.require("admin")
+
+    async def admin(p: Principal = Depends(require_admin)) -> Principal:
+        # An admin's token reaches other apps too; changes to members come only from the admin portal
+        if p.client_id not in admin_clients:
+            raise HTTPException(403, {"error": "wrong_client",
+                                      "message": "changes to members are accepted only from the admin portal"})
+        return p
+
+    def sees_everything(p: Principal) -> bool:
+        """Admins and services see members' roles and status. Everyone else sees names and emails."""
+        return p.is_service_account or p.has_role("admin")
+
+    def view(p: Principal, m: Member) -> MemberOut | MemberSummary:
+        return MemberOut.of(m) if sees_everything(p) else MemberSummary.of(m)
 
     def actor(p: Principal) -> dict:
         return {"actor_id": p.subject, "actor_name": p.name or p.username}
@@ -70,9 +88,12 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
     @r.get("/v1/members", response_model=MemberList, tags=["directory"], summary="Search the member directory")
     def members(p: Principal = Depends(reader), s: Session = Depends(get_session),
                 q: str | None = Query(None, description="Matches name, email or username"),
-                role: str | None = None, app: str | None = None,
-                status: str = Query("active", pattern="^(active|disabled|removed|all)$"),
+                role: str | None = Query(None, description="Admins and services only"),
+                status: str = Query("active", pattern="^(active|disabled|removed|all)$",
+                                    description="Other than active: admins and services only"),
                 limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
+        if not sees_everything(p) and (role or status != "active"):
+            raise HTTPException(403, {"error": "insufficient_role", "message": "only admins can filter by role or status"})
         stmt = select(Member).where(Member.tenant_id == tenant_id)
         if status != "all":
             stmt = stmt.where(Member.status == status)
@@ -82,23 +103,17 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
                                   func.lower(Member.first_name).like(like), func.lower(Member.last_name).like(like)))
         if role:
             stmt = stmt.where(Member.id.in_(select(MemberRole.member_id).where(MemberRole.role == role)))
-        if app:
-            stmt = stmt.where(Member.id.in_(select(MemberApp.member_id).where(MemberApp.app_id == app)))
         total = s.scalar(select(func.count()).select_from(stmt.subquery()))
         rows = s.scalars(stmt.order_by(func.lower(Member.username)).limit(limit).offset(offset)).all()
-        return MemberList(total=total, items=[MemberOut.of(m) for m in rows])
+        return MemberList(total=total, items=[view(p, m) for m in rows])
 
-    @r.get("/v1/members/{member_id}", response_model=MemberOut, tags=["directory"])
+    @r.get("/v1/members/{member_id}", response_model=MemberOut | MemberSummary, tags=["directory"])
     def member(member_id: str, p: Principal = Depends(reader), s: Session = Depends(get_session)):
-        return MemberOut.of(member_or_404(s, member_id))
+        return view(p, member_or_404(s, member_id))
 
     @r.get("/v1/roles", response_model=list[RoleOut], tags=["directory"])
     def roles(p: Principal = Depends(reader)):
         return [RoleOut(name=n, description=d, editable=n in EDITABLE_ROLES) for n, d in ROLES.items()]
-
-    @r.get("/v1/apps", response_model=list[AppOut], tags=["directory"])
-    def apps(p: Principal = Depends(reader), s: Session = Depends(get_session)):
-        return [AppOut(id=a.id, name=a.name, default_enabled=a.default_enabled) for a in s.scalars(select(App).order_by(App.id))]
 
     @r.get("/v1/tenant", response_model=TenantOut, tags=["directory"])
     def tenant(p: Principal = Depends(reader), s: Session = Depends(get_session)):
@@ -130,23 +145,6 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
             s.add(MemberEvent(tenant_id=tenant_id, member_id=member_id, action="roles_changed",
                               detail={"added": sorted(add), "removed": sorted(remove)}, **actor(p)))
             s.commit()
-        return MemberOut.of(m)
-
-    @r.put("/v1/members/{member_id}/apps", response_model=MemberOut, tags=["admin"], summary="Set the apps a member may use")
-    def put_apps(member_id: str, body: AppsIn, p: Principal = Depends(admin), s: Session = Depends(get_session)):
-        known = set(s.scalars(select(App.id)).all())
-        bad = set(body.apps) - known
-        if bad:
-            raise HTTPException(422, {"error": "unknown_app", "message": f"unknown app(s): {sorted(bad)}"})
-        m = member_or_404(s, member_id)
-        before = set(m.app_ids)
-        set_member_apps(m, set(body.apps))
-        if before != set(body.apps):
-            m.updated_at = utcnow()
-            s.add(MemberEvent(tenant_id=tenant_id, member_id=member_id, action="apps_changed",
-                              detail={"added": sorted(set(body.apps) - before), "removed": sorted(before - set(body.apps))},
-                              **actor(p)))
-        s.commit()
         return MemberOut.of(m)
 
     @r.post("/v1/members/{member_id}/disable", response_model=MemberOut, tags=["admin"],
@@ -188,11 +186,7 @@ def build_router(auth: FastAPIAuth, get_session: Callable, get_kc: Callable, ten
         bad_roles = set(body.roles) - EDITABLE_ROLES
         if bad_roles:
             raise HTTPException(422, {"error": "role_not_editable", "message": f"can't invite with {sorted(bad_roles)}"})
-        known = set(s.scalars(select(App.id)).all())
-        apps = sorted(set(body.apps) if body.apps is not None else
-                      set(s.scalars(select(App.id).where(App.default_enabled.is_(True))).all()))
-        if set(apps) - known:
-            raise HTTPException(422, {"error": "unknown_app", "message": f"unknown app(s): {sorted(set(apps) - known)}"})
+        apps = sorted(s.scalars(select(App.id).where(App.default_enabled.is_(True))).all())   # stored, not shown yet
         if s.scalar(select(Member.id).where(Member.tenant_id == tenant_id, func.lower(Member.email) == body.email,
                                             Member.status != "removed")):
             raise HTTPException(409, {"error": "already_member", "message": "someone with this email is already a member"})

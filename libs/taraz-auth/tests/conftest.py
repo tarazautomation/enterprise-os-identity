@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from taraz_auth import TokenVerifier
 
 ISSUER = "https://auth.test/realms/taraz"
+OTHER_ISSUER = "https://auth.test/realms/acme"
 KID = "test-key-1"
 
 
@@ -39,6 +40,7 @@ def make_token():
             "sub": "1119fedd-661c-42ec-869a-a2f9d2240f18",
             "typ": "Bearer",
             "azp": "app-shell",
+            "aud": ["knowledge-base", "account"],
             "iat": now,
             "exp": now + 300,
             "preferred_username": "test.user@example.com",
@@ -66,6 +68,6 @@ def other_jwks():
 
 @pytest.fixture
 def verifier():
-    v = TokenVerifier(ISSUER, "taraz")
+    v = TokenVerifier(ISSUER, "taraz", audience="knowledge-base")
     v._keys.fetch_data = _jwks          # serve the test JWKS instead of calling Keycloak
     return v

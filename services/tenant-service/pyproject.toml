@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Enterprise OS member directory and admin-portal back end (P2.2): tenants, members, roles, app access, agents, invites, kept in sync with Keycloak."
 requires-python = ">=3.11"
 dependencies = [
-  "taraz-auth[fastapi]>=1.0,<2",   # libs/taraz-auth in this repo
+  "taraz-auth[fastapi]>=2,<3",     # libs/taraz-auth in this repo
   "fastapi>=0.110",
   "uvicorn[standard]>=0.30",
   "sqlalchemy>=2.0",

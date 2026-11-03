@@ -7,17 +7,22 @@ from .errors import MissingRole
 
 SERVICE_ACCOUNT_PREFIX = "service-account-"
 
+# Agents sign in through external-agents. mcp-server exchanges an agent's token for one addressed to another
+# service, so a person's token from either client is an agent acting for that person.
+DEFAULT_AGENT_CLIENTS = frozenset({"external-agents", "mcp-server"})
+
 
 @dataclass(frozen=True)
 class Principal:
     subject: str                      # Keycloak user id ("sub"), stable for the life of the account
-    tenant_id: str
+    tenant_id: str                    # whose request this is: the customer the token's realm belongs to
     roles: frozenset[str]
     username: str | None = None
     email: str | None = None
     name: str | None = None
     client_id: str | None = None      # the app that asked for the token ("azp")
     claims: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    agent_clients: frozenset[str] = field(default=DEFAULT_AGENT_CLIENTS, repr=False)
 
     @property
     def is_service_account(self) -> bool:
@@ -31,8 +36,10 @@ class Principal:
 
     @property
     def is_agent(self) -> bool:
-        """True for an AI agent (e.g. Claude) acting for a person."""
-        return "agent" in self.roles
+        """True for an AI agent (e.g. Claude) acting for the person in `subject`. The token names both: the
+        person in sub, and the agent's way in (one of agent_clients) in azp. It carries that person's roles,
+        never admin."""
+        return self.client_id in self.agent_clients and not self.is_service_account
 
     def has_role(self, role: str) -> bool:
         return role in self.roles

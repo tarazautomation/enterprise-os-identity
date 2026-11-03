@@ -83,7 +83,7 @@ def app_client(kc):
                         client_secret="x", database_url="sqlite://")
     engine = make_engine("sqlite://")
     Base.metadata.create_all(engine)
-    verifier = TokenVerifier(ISSUER, "taraz")
+    verifier = TokenVerifier(ISSUER, "taraz", audience="tenant-service")
     verifier._keys.fetch_data = _jwks
     app = create_app(settings, kc=kc, verifier=verifier, engine=engine, run_sync_loop=False)
     with TestClient(app) as c:       # runs startup: seeds tenant + apps
@@ -94,7 +94,8 @@ def app_client(kc):
 def token():
     def _make(sub, roles=("employee",), username=None, tenant="taraz", **extra):
         now = int(time.time())
-        claims = {"iss": ISSUER, "sub": sub, "typ": "Bearer", "azp": "app-shell", "iat": now, "exp": now + 300,
+        claims = {"iss": ISSUER, "sub": sub, "typ": "Bearer", "azp": "app-shell", "aud": ["tenant-service"],
+                  "iat": now, "exp": now + 300,
                   "preferred_username": username or f"user-{sub[:6]}", "tenant_id": tenant,
                   "realm_access": {"roles": list(roles)}, **extra}
         return {"Authorization": "Bearer " + jwt.encode(claims, _PEM, algorithm="RS256", headers={"kid": KID})}

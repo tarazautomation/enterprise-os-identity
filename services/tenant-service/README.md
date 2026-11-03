@@ -13,10 +13,10 @@ Full description: `openapi.json` (generated from the code; offered as the tenant
 | Call | Who |
 |---|---|
 | `GET /v1/me` | any member |
-| `GET /v1/members?q=&role=&app=&status=` · `GET /v1/members/{id}` | any member, and other services |
-| `GET /v1/roles` · `GET /v1/apps` · `GET /v1/tenant` | any member, and other services |
+| `GET /v1/members?q=` · `GET /v1/members/{id}` | any member, and other services. Names and emails only, except for admins and services |
+| `GET /v1/members?role=&status=` | admins and services |
+| `GET /v1/roles` · `GET /v1/tenant` | any member, and other services |
 | `PUT /v1/members/{id}/roles` (admin, process_owner) | admins |
-| `PUT /v1/members/{id}/apps` | admins |
 | `POST /v1/members/{id}/disable` · `/enable` | admins |
 | `GET /v1/members/{id}/events` | admins |
 | `POST/GET /v1/invites` · `DELETE /v1/invites/{id}` | admins (stored now; the email flow comes in V2) |
@@ -25,6 +25,8 @@ Full description: `openapi.json` (generated from the code; offered as the tenant
 | `GET /healthz` | anyone (no token) |
 
 Rules:
+- **Tokens must be addressed to `tenant-service`** (its audience), and **changes come only from the admin portal**: an admin's token from another app (`ADMIN_CLIENTS`, default `app-shell`) is refused.
+- **App access isn't offered yet.** It's kept in the database, but apps don't enforce it, so the API doesn't show it until they do.
 - **Only `admin` and `process_owner` can be set.** Everyone gets `employee` through the realm's default role, and `agent` is for AI agents.
 - **The last admin can't be removed or disabled,** and nobody can disable themselves.
 - **Disabling someone also ends their sessions.**
@@ -45,6 +47,10 @@ Answers to bad requests: 401 (no, invalid, expired or wrong-tenant token), 403 (
 | `TARAZ_AUTH_JWKS_URL` | optional internal address of Keycloak's public keys |
 | `KEYCLOAK_INTERNAL_URL` | optional: `http://keycloak-service.identity.svc.cluster.local:8080`, the base URL for admin API and token calls when the issuer's address doesn't work from inside the service (in a pod, `localhost` is the pod). Defaults to the issuer's base. The issuer stays the public value that tokens are checked against |
 | `TARAZ_AUTH_TOKEN_URL` | optional: where this service gets its own token. Defaults to `<KEYCLOAK_INTERNAL_URL or issuer base>/realms/<realm>/protocol/openid-connect/token` |
+| `ADMIN_CLIENTS` | optional: the apps admins may change members from. Default `app-shell` |
+| `TARAZ_AUTH_SKIP_AUDIENCE_CHECK` | `true` only until the realm has been applied with audiences (`keycloak/README.md`) |
+
+One tenant-service runs per customer, with that customer's issuer and tenant.
 
 ## Run, test, migrate
 

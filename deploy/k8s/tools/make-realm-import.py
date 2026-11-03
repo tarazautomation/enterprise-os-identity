@@ -1,24 +1,26 @@
-"""Wrap realm-taraz.json in a KeycloakRealmImport for the Keycloak Operator.
+"""Wrap a rendered realm (keycloak/realm-<tenant>.json) in a KeycloakRealmImport for the Keycloak Operator.
 
-Every ${KC_...} placeholder in the realm file is mapped to the same-named key of the
-Secret "keycloak-realm-secrets" in the Keycloak namespace. Run again whenever the realm
-file changes:
+The rendered realm holds $(env:KC_...) placeholders for keycloak-config-cli. Here each one becomes the operator's
+${KC_...} placeholder, mapped to the same-named key of the Secret "keycloak-realm-secrets" in the Keycloak
+namespace. Run again whenever the realm changes (after `python keycloak/render.py`):
 
-    python make-realm-import.py <realm-taraz.json> <output realm-import.json>
+    python make-realm-import.py <keycloak/realm-taraz.json> <output realm-import.json>
 
-Note: a realm import only CREATES a realm. If the realm already exists, it is left as is.
+Note: a realm import only CREATES a realm. If the realm already exists, it is left as is. Change existing realms
+with keycloak-config-cli (keycloak/README.md).
 """
 import json
 import re
 import sys
 
 SECRET_NAME = "keycloak-realm-secrets"
+PLACEHOLDER = re.compile(r"\$\(env:(KC_[A-Z0-9_]+)\)")
 
 
 def main(src: str, dst: str) -> None:
     text = open(src, encoding="utf-8").read()
-    realm = json.loads(text)
-    placeholders = sorted(set(re.findall(r"\$\{(KC_[A-Z0-9_]+)\}", text)))
+    placeholders = sorted(set(PLACEHOLDER.findall(text)))
+    realm = json.loads(PLACEHOLDER.sub(r"${\1}", text))
     cr = {
         "apiVersion": "k8s.keycloak.org/v2beta1",
         "kind": "KeycloakRealmImport",
@@ -29,7 +31,7 @@ def main(src: str, dst: str) -> None:
             "realm": realm,
         },
     }
-    with open(dst, "w", encoding="utf-8") as f:
+    with open(dst, "w", encoding="utf-8", newline="\n") as f:
         json.dump(cr, f, indent=2, ensure_ascii=False)
         f.write("\n")
     print(f"wrote {dst}: realm '{realm['realm']}', {len(placeholders)} placeholders from Secret {SECRET_NAME}")
