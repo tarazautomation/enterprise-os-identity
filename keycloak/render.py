@@ -11,8 +11,9 @@ Inputs:
   tenants/<id>.json    one customer: realm name, its Microsoft (Entra) tenant and app, redirect addresses,
                        back-channel logout addresses, the name of the variable holding its Microsoft secret, and
                        client_copies: more clients made from one in the template, e.g. a staging copy of scribe
-                       with its own addresses (a client has one back-channel logout address), and "lab": true
-                       for a test realm, the only kind allowed localhost addresses for its web apps
+                       with its own addresses (a client has one back-channel logout address), "lab": true
+                       for a test realm, the only kind allowed localhost addresses for its web apps, and
+                       "google": {"client_id": ...} to offer Google sign-in next to Microsoft (add_google)
 
 No secret is in any of these files. Client secrets are left to Keycloak, which generates one per client, and the
 Microsoft secret is written as $(env:NAME) for keycloak-config-cli to fill in when it applies the realm.
@@ -37,6 +38,14 @@ def load(path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def secret_ref(tenant: dict, name: str) -> str:
+    """The placeholder keycloak-config-cli fills with the secret named in the tenant file's "secrets"."""
+    env = tenant["secrets"][name]
+    if not SECRET_ENV.fullmatch(env):
+        raise ValueError(f"secret variable {env!r} must look like KC_NAME")
+    return f"$(env:{env})"
+
+
 def fill(node, tenant: dict):
     """Replace every {{name}} in the template with the tenant's value."""
     if isinstance(node, dict):
@@ -52,10 +61,7 @@ def fill(node, tenant: dict):
     def one(m: re.Match) -> str:
         key = m.group(1)
         if key.startswith("secret:"):
-            name = tenant["secrets"][key.split(":", 1)[1]]
-            if not SECRET_ENV.fullmatch(name):
-                raise ValueError(f"secret variable {name!r} must look like KC_NAME")
-            return f"$(env:{name})"
+            return secret_ref(tenant, key.split(":", 1)[1])
         value = tenant
         for part in key.split("."):
             value = value[part]
@@ -168,6 +174,75 @@ def check_addresses(tenant: dict) -> None:
             raise ValueError(f"{tenant['realm']}: {cid} returns to {plain[0]}; use https")
 
 
+def step(requirement: str, authenticator: str = "", flow: str = "", config: str = "", priority: int = 0) -> dict:
+    """One step of an authentication flow: an authenticator, or a sub-flow by its alias."""
+    e = {"authenticatorFlow": bool(flow), "requirement": requirement, "priority": priority,
+         "autheticatorFlow": bool(flow), "userSetupAllowed": False}       # sic: Keycloak's own spelling
+    e.update({"flowAlias": flow} if flow else {"authenticator": authenticator})
+    if config:
+        e["authenticatorConfig"] = config
+    return e
+
+
+def add_google(realm: dict, tenant: dict) -> None:
+    """Sign in with Google next to Microsoft. Any Google account may sign in, unless the tenant file gives a
+    "hosted_domain" (one Google Workspace domain, which Google is asked for and Keycloak checks in its answer).
+
+    Microsoft stays the default: an app offers Google by sending kc_idp_hint=google. A first Google sign-in makes a
+    new account, unless one with that email exists: then the person must sign in to that account (with Microsoft)
+    before Google is linked to it. Google's word on the email is never enough to link, so owning a Google account
+    with someone's address doesn't get you their account. Admins enter their one-time code, as after Microsoft."""
+    google = tenant.get("google")
+    if not google:
+        return
+    config = {
+        "clientId": google["client_id"],
+        "clientSecret": secret_ref(tenant, "google"),
+        "defaultScope": "openid profile email",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256",
+        "syncMode": "IMPORT",                 # Microsoft keeps names and email current for linked accounts
+        "acceptsPromptNoneForwardFromClient": "false",
+        "offlineAccess": "false",
+        "userIp": "false",
+        "filteredByClaim": "false",
+        "guiOrder": "2",
+    }
+    if google.get("hosted_domain"):
+        config["hostedDomain"] = google["hosted_domain"]
+    realm["identityProviders"].append({
+        "alias": "google", "displayName": "Google", "providerId": "google", "enabled": True,
+        "trustEmail": False, "storeToken": False, "addReadTokenRoleOnCreate": False, "authenticateByDefault": False,
+        "linkOnly": False, "hideOnLogin": False,
+        "firstBrokerLoginFlowAlias": "first-google-sign-in", "postBrokerLoginFlowAlias": "after-microsoft-sign-in",
+        "config": config,
+    })
+    realm["identityProviderMappers"].append({
+        "name": f"tenant_id = {tenant['realm']}", "identityProviderAlias": "google",
+        "identityProviderMapper": "hardcoded-attribute-idp-mapper",
+        "config": {"syncMode": "INHERIT", "attribute.value": tenant["realm"], "attribute": "tenant_id"},
+    })
+    realm["authenticationFlows"] += [
+        {"alias": "first-google-sign-in", "providerId": "basic-flow", "topLevel": True, "builtIn": False,
+         "description": "A first Google sign-in: a new account, or Google linked to an existing one once the person "
+                        "has signed in to it",
+         "authenticationExecutions": [
+             step("REQUIRED", "idp-review-profile", config="review profile config", priority=10),
+             step("REQUIRED", flow="google: new or existing account", priority=20)]},
+        {"alias": "google: new or existing account", "providerId": "basic-flow", "topLevel": False, "builtIn": False,
+         "description": "A new account if the email is free, otherwise prove it's yours",
+         "authenticationExecutions": [
+             step("ALTERNATIVE", "idp-create-user-if-unique", config="create unique user config", priority=10),
+             step("ALTERNATIVE", flow="google: prove the existing account is yours", priority=20)]},
+        {"alias": "google: prove the existing account is yours", "providerId": "basic-flow", "topLevel": False,
+         "builtIn": False,
+         "description": "Confirm, then sign in to the existing account (Microsoft); no linking on email alone",
+         "authenticationExecutions": [
+             step("REQUIRED", "idp-confirm-link", priority=10),
+             step("REQUIRED", "idp-username-password-form", priority=20)]},
+    ]
+
+
 def render(template: dict, tenant: dict, access: dict) -> dict:
     if not REALM_NAME.fullmatch(tenant["realm"]):
         raise ValueError(f"realm {tenant['realm']!r}: use lowercase letters, digits and dashes, starting with a letter")
@@ -177,6 +252,7 @@ def render(template: dict, tenant: dict, access: dict) -> dict:
     realm = fill(template, tenant)
     apply_access(realm, access)
     microsoft_first(realm, tenant.get("microsoft_first", False))
+    add_google(realm, tenant)
     for cid, url in tenant.get("backchannel_logout", {}).items():
         client = next((c for c in realm["clients"] if c["clientId"] == cid), None)
         if client is None:

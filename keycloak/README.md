@@ -6,7 +6,7 @@ customers can share one Keycloak and one cluster. The realms are written from on
 | File | What it is |
 |---|---|
 | `template/realm.json` | The realm, with `{{...}}` where customers differ. Edit this to change every customer |
-| `tenants/<tenant>.json` | One customer: realm name, display name, Microsoft tenant and app, redirect addresses, back-channel logout addresses (`backchannel_logout`: where Keycloak tells an app someone signed out), the name of the variable holding its Microsoft secret, `lab: true` for test realms (only they may send web apps' sign-ins to localhost; desktop apps such as `scribe-desktop` may use 127.0.0.1 anywhere), and `client_copies`: more clients made from one in the template, with their own redirect and logout addresses (Taraz's `scribe-staging`, a copy of `scribe`) |
+| `tenants/<tenant>.json` | One customer: realm name, display name, Microsoft tenant and app, redirect addresses, back-channel logout addresses (`backchannel_logout`: where Keycloak tells an app someone signed out), the name of the variable holding its Microsoft secret, `lab: true` for test realms (only they may send web apps' sign-ins to localhost; desktop apps such as `scribe-desktop` may use 127.0.0.1 anywhere), `client_copies`: more clients made from one in the template, with their own redirect and logout addresses (Taraz's `scribe-staging`, a copy of `scribe`), and `google` to offer Google sign-in (below) |
 | `access.json` | Who may call whom, and the roles each app's tokens carry. See below |
 | `render.py` | Writes `realm-<tenant>.json` for each tenant file |
 | `realm-<tenant>.json` | The result. Don't edit it by hand: CI fails if it doesn't match |
@@ -41,6 +41,35 @@ calls** before each service turns its audience check on.
    **Actions → apply realms** with the tenant's name.
 5. Give the customer's first admin the `admin` role in the new realm's admin console.
 
+## Google sign-in
+
+A tenant offers Google next to Microsoft when its file has:
+
+```json
+"google": {"client_id": "<id>.apps.googleusercontent.com"},
+"secrets": {"entra": "KC_ENTRA_CLIENT_SECRET", "google": "KC_GOOGLE_CLIENT_SECRET"}
+```
+
+- **Who:** any Google account. Add `"hosted_domain": "example.com"` to allow one Google Workspace domain only;
+  Keycloak then checks the domain in Google's answer too.
+- **Microsoft stays the default.** With `microsoft_first`, people go straight to Microsoft as before; an app
+  offers Google with its own button that sends `kc_idp_hint=google` (and `kc_idp_hint=entra` for Microsoft).
+- **A first Google sign-in** makes a new account with the `employee` role, as a first Microsoft sign-in does. If
+  an account with that email already exists, Keycloak asks the person to sign in to it (with Microsoft) and only
+  then links Google to it. Google's word on the email is never enough to link.
+- **Admins** enter their one-time code after a Google sign-in too.
+- **Leavers:** tenant-service's leavers' sync reads Microsoft only. Turn off a Google-only account in the admin
+  portal.
+
+To set it up:
+
+1. In Google Cloud (APIs & Services > Credentials), create an OAuth client ID of type "Web application" with the
+   redirect URI `https://<keycloak>/realms/<tenant>/broker/google/endpoint`, and set the consent screen's audience
+   to External (any Google account) or Internal (your Workspace only).
+2. Put its client ID in the tenant file as above, run `python keycloak/render.py`, and open a pull request.
+3. Add its secret to the GitHub environment `keycloak-production` under the name in `secrets.google`, then run
+   **apply realms**.
+
 ## Applying
 
 The template leaves out the few realm settings added after Keycloak 26.5 (`maxSecondaryAuthFailures`, two WebAuthn resident-key settings, `scimApiEnabled` and the Microsoft provider's `types`). keycloak-config-cli 6.5.1 is built on 26.5 and refuses them. They were at their defaults, so Keycloak's defaults apply. Add them back when a keycloak-config-cli release supports 26.8.
@@ -55,7 +84,7 @@ GitHub environment `keycloak-production` with:
 - `KEYCLOAK_CLIENT_ID` and `KEYCLOAK_CLIENT_SECRET`: a confidential client in the **master** realm, with service
   accounts on and the master realm role `admin` (or `create-realm` plus `realm-admin` on each tenant's realm).
   It replaces people signing in to make realm changes
-- each tenant's Microsoft secret, under the name in its tenant file
+- each secret named in a tenant file's `secrets`: its Microsoft secret, and Google's if it has Google
 
 Protect that environment with a required reviewer.
 
@@ -65,4 +94,5 @@ their mapped roles. Apply before services turn their audience check on, and chec
 ## Checked in CI
 
 The `keycloak` job starts Keycloak, applies the Taraz realm and two test tenants twice, and tests real tokens
-(`tests/integration`). Microsoft sign-in itself can't run in CI: check it in the lab or on staging.
+(`tests/integration`). Microsoft and Google sign-in themselves can't run in CI (CI checks the realm sends people
+to Google correctly and links accounts only after a sign-in): check them in the lab or on staging.

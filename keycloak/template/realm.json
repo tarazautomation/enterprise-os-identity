@@ -2256,7 +2256,7 @@
     },
     {
       "alias": "after-microsoft-sign-in",
-      "description": "Runs after Microsoft 365 sign-in: admins must enter a one-time code",
+      "description": "Runs after a Microsoft or Google sign-in: admins must enter a one-time code",
       "providerId": "basic-flow",
       "topLevel": true,
       "builtIn": false,

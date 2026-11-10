@@ -41,6 +41,10 @@ Provider mappers, applied on every sign-in:
 
 `tenant_id`, `entra_oid` and `entra_tid` are declared in the realm's user profile (admin view and edit only). Keycloak 24+ drops undeclared attributes.
 
+### Google (optional, per tenant)
+
+A tenant can offer Google sign-in next to Microsoft (`google` in its tenant file, `keycloak/README.md`). Any Google account may sign in unless the file names one Workspace domain. Microsoft stays the default; an app offers Google by sending `kc_idp_hint=google`. A first Google sign-in makes an account with the `employee` role, like Microsoft's (decided 2026-11-10). When an account with that email already exists, Keycloak links Google to it only after the person signs in to that account with Microsoft (flow `first-google-sign-in`; Google's email is not trusted for linking). Admins enter their one-time code after Google sign-in too. Google accounts have no `entra_oid`, so the leavers' sync doesn't cover them (turn them off in the admin portal), and Scribe, which matches accounts by Microsoft id, refuses Google-only accounts.
+
 ### Roles
 
 | Role | Who | How it's given |

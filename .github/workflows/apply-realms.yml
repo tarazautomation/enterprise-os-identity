@@ -3,7 +3,7 @@
 #   KEYCLOAK_URL             e.g. https://taraz-auth.up.railway.app
 #   KEYCLOAK_CLIENT_ID       the master-realm client keycloak-config-cli signs in with
 #   KEYCLOAK_CLIENT_SECRET   its secret
-#   one secret per tenant, named as in its tenant file's "secrets.entra" (e.g. KC_ENTRA_CLIENT_SECRET)
+#   each secret named in the tenant file's "secrets" (e.g. KC_ENTRA_CLIENT_SECRET, KC_GOOGLE_CLIENT_SECRET)
 name: apply realms
 
 on:
@@ -27,26 +27,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check the realm file is up to date
         run: python keycloak/render.py --check
-      - name: Find the tenant's secret name
-        id: tenant
-        env:
-          REALM: ${{ inputs.realm }}
-        run: |
-          [[ "$REALM" =~ ^[a-z][a-z0-9-]{1,39}$ && -f "keycloak/tenants/$REALM.json" ]] || { echo "no tenant file for $REALM"; exit 1; }
-          echo "secret_env=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["secrets"]["entra"])' "keycloak/tenants/$REALM.json")" >> "$GITHUB_OUTPUT"
       - name: Apply
         env:
           REALM: ${{ inputs.realm }}
-          SECRET_ENV: ${{ steps.tenant.outputs.secret_env }}
-          SECRET_VALUE: ${{ secrets[steps.tenant.outputs.secret_env] }}
+          ENVIRONMENT_SECRETS: ${{ toJSON(secrets) }}
           KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
           KEYCLOAK_CLIENTID: ${{ secrets.KEYCLOAK_CLIENT_ID }}
           KEYCLOAK_CLIENTSECRET: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
         run: |
-          [ -n "$SECRET_VALUE" ] || { echo "secret $SECRET_ENV is not set in this environment"; exit 1; }
-          export "$SECRET_ENV=$SECRET_VALUE"
+          [[ "$REALM" =~ ^[a-z][a-z0-9-]{1,39}$ && -f "keycloak/tenants/$REALM.json" ]] || { echo "no tenant file for $REALM"; exit 1; }
+          # Each secret the tenant file names (Microsoft's, Google's), from this environment's secrets
+          pass=()
+          for name in $(python -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1]))["secrets"].values()))' "keycloak/tenants/$REALM.json"); do
+            [[ "$name" =~ ^KC_[A-Z0-9_]+$ ]] || { echo "bad secret name $name"; exit 1; }
+            value=$(python -c 'import json,os,sys; print(json.loads(os.environ["ENVIRONMENT_SECRETS"]).get(sys.argv[1], ""))' "$name")
+            [ -n "$value" ] || { echo "secret $name is not set in this environment"; exit 1; }
+            export "$name=$value"
+            pass+=(-e "$name")
+          done
+          unset ENVIRONMENT_SECRETS
           docker run --rm --env-file keycloak/config-cli.env \
             -e KEYCLOAK_URL -e KEYCLOAK_CLIENTID -e KEYCLOAK_CLIENTSECRET \
             -e KEYCLOAK_GRANTTYPE=client_credentials -e KEYCLOAK_LOGINREALM=master \
-            -e IMPORT_FILES_LOCATIONS="/config/realm-$REALM.json" -e "$SECRET_ENV" \
+            -e IMPORT_FILES_LOCATIONS="/config/realm-$REALM.json" "${pass[@]}" \
             -v "$PWD/keycloak:/config:ro" "$CONFIG_CLI_IMAGE"
