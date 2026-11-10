@@ -13,7 +13,11 @@
     "scribe": ["http://localhost:8001/*"],
     "scribe-desktop": ["http://127.0.0.1/*"]
   },
+  "google": {
+    "client_id": "ci-beta.apps.googleusercontent.com"
+  },
   "secrets": {
-    "entra": "KC_CI_ENTRA_CLIENT_SECRET"
+    "entra": "KC_CI_ENTRA_CLIENT_SECRET",
+    "google": "KC_CI_GOOGLE_CLIENT_SECRET"
   }
 }

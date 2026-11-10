@@ -249,3 +249,43 @@ def test_scribe_staging_is_a_copy_of_scribe_with_its_own_audience(admin):
     TokenVerifier(issuer("taraz"), "taraz", audience="scribe-staging").verify(token)    # verifies its own sign-ins
     with pytest.raises(InvalidToken):
         TokenVerifier(issuer("taraz"), "taraz", audience="scribe").verify(token)          # not production's
+
+
+# --- Google sign-in (ci-beta has it, ci-alpha doesn't) ---
+
+def test_google_sign_in_is_offered_with_microsoft(admin):
+    google = admin.get(f"/{B}/identity-provider/instances/google").json()
+    assert google["providerId"] == "google" and google["enabled"] is True
+    assert google["trustEmail"] is False                                 # Google's word on an email never links
+    assert google["firstBrokerLoginFlowAlias"] == "first-google-sign-in"
+    assert google["postBrokerLoginFlowAlias"] == "after-microsoft-sign-in"   # admins enter their one-time code
+    assert "hostedDomain" not in google["config"]                         # any Google account
+    mappers = admin.get(f"/{B}/identity-provider/instances/google/mappers").json()
+    assert {m["config"].get("attribute") for m in mappers} == {"tenant_id"}  # tokens carry the tenant
+    assert admin.get(f"/{A}/identity-provider/instances/google").status_code == 404
+
+
+def test_an_app_sends_people_to_google_with_a_hint():
+    verifier = secrets.token_urlsafe(48)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    with httpx.Client(timeout=30) as h:
+        r = h.get(f"{issuer(B)}/protocol/openid-connect/auth", params={
+            "client_id": "app-shell", "response_type": "code", "scope": "openid", "state": "ci",
+            "redirect_uri": "http://localhost:3000/callback", "kc_idp_hint": "google",
+            "code_challenge": challenge, "code_challenge_method": "S256"})
+        r = within_keycloak(h, r)
+    assert r.status_code in (302, 303), what_page(r.text)
+    to = urlparse(r.headers["location"])
+    query = parse_qs(to.query)
+    assert to.netloc == "accounts.google.com"
+    assert query["client_id"] == ["ci-beta.apps.googleusercontent.com"]
+    assert query["code_challenge_method"] == ["S256"] and "hd" not in query
+    assert query["redirect_uri"] == [f"{issuer(B)}/broker/google/endpoint"]
+
+
+def test_google_links_to_an_existing_account_only_after_signing_in_to_it(admin):
+    steps = admin.get(f"/{B}/authentication/flows/first-google-sign-in/executions").json()
+    used = [s.get("providerId") for s in steps if s.get("requirement") != "DISABLED"]
+    assert "idp-create-user-if-unique" in used                             # a new account when the email is free
+    assert "idp-confirm-link" in used and "idp-username-password-form" in used
+    assert "idp-email-verification" not in used and "idp-auto-link" not in used
