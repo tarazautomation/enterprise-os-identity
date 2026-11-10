@@ -42,7 +42,7 @@ jobs:
       - name: The realm files match the template and the tenant files
         run: |
           python keycloak/render.py --check
-          python deploy/k8s/tools/make-realm-import.py keycloak/realm-taraz.json "$RUNNER_TEMP/realm-import.json"
+          python deploy/k8s/tools/make-realm-import.py keycloak/realm-taraz.json "$RUNNER_TEMP/realm-import.json" --lab
           diff "$RUNNER_TEMP/realm-import.json" deploy/k8s/base/keycloak/realm-import.json
       - name: openapi.json matches the code
         working-directory: services/tenant-service

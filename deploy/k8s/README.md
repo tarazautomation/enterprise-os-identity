@@ -24,7 +24,7 @@ local/                      local k3d cluster only
   up.sh                     brings everything up; safe to re-run
   set-entra-secret.sh       asks for the Microsoft secret with hidden typing and stores it
 tools/
-  make-realm-import.py      realm-taraz.json -> base/keycloak/realm-import.json
+  make-realm-import.py      realm-taraz.json -> base/keycloak/realm-import.json (--lab adds the port-forward addresses)
 ```
 
 ## Run it locally
@@ -76,7 +76,7 @@ Keys in `keycloak-realm-secrets`: `KC_ENTRA_CLIENT_SECRET`, `KC_CLIENT_SECRET_SC
 
 ## Things to know
 
-- **A realm import only creates.** If the realm already exists, the import leaves it alone. Change a live realm with keycloak-config-cli, or by hand followed by a fresh export. After changing `realm-taraz.json`, run `python tools/make-realm-import.py ../../keycloak/realm-taraz.json base/keycloak/realm-import.json   (from deploy/k8s)`.
+- **A realm import only creates.** If the realm already exists, the import leaves it alone. Change a live realm with keycloak-config-cli, or by hand followed by a fresh export. After changing `realm-taraz.json`, run `python tools/make-realm-import.py ../../keycloak/realm-taraz.json base/keycloak/realm-import.json --lab` (from deploy/k8s). `--lab` adds the localhost addresses the lab's apps use through port-forwards; the production realm has none.
 - **The temporary admin.** The operator creates `keycloak-initial-admin`. On staging and production, sign in once, give a real admin access to the master realm, then delete the temporary admin.
 - **API version.** The manifests use `k8s.keycloak.org/v2beta1`; `v2alpha1` still works but prints a deprecation warning.
 - **The Entra secret currently in use is due to be replaced.** It was exposed in chat on 2026-10-19 and will be rotated at the end of V1 work. Update `KC_ENTRA_CLIENT_SECRET` then, and in Keycloak (Identity providers → Microsoft 365 → Client Secret) too, because the realm already exists.

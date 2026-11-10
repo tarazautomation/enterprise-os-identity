@@ -7,8 +7,8 @@
     "client_id": "7b315648-cdc2-432c-93e8-2881346f886d"
   },
   "redirect_uris": {
-    "app-shell": ["http://localhost:3000/*", "http://localhost:5173/*"],
-    "knowledge-base": ["http://localhost:8000/*"],
+    "app-shell": [],
+    "knowledge-base": [],
     "scribe": ["https://web-production-ca083.up.railway.app/*"],
     "scribe-staging": ["https://scribe-staging.up.railway.app/*"],
     "scribe-desktop": ["http://127.0.0.1/*"]

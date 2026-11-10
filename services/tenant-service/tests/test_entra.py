@@ -2,7 +2,9 @@ import json
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
+from conftest import build_app
 from tenant_service.entra import EntraError, GraphUsers, disable_leavers
 from tenant_service.models import Member, MemberEvent
 from tenant_service.sync import sync_all
@@ -124,6 +126,46 @@ def test_assignments_are_read_directly_and_through_groups():
                      "/v1.0/servicePrincipals/sp-1/appRoleAssignedTo",
                      "/v1.0/groups/g1/transitiveMembers/microsoft.graph.user"]
 
+
+# --- guests ---
+
+def test_guests_from_other_organisations_are_disabled(kc, staff, session):
+    accounts = {"oid-junaid": True, "oid-ali": True, "oid-sara": True}
+    res = disable_leavers(session, kc, "taraz", accounts, max_disable=5, guests={"oid-sara", "oid-someone-else"})
+    assert res.disabled == [staff["sara"]] and staff["sara"] in kc.logouts
+    reasons = {e.member_id: e.detail["reason"] for e in session.query(MemberEvent).filter_by(action="disabled_by_microsoft")}
+    assert reasons == {staff["sara"]: "a guest in Microsoft, not one of the company's own accounts"}
+
+
+def test_guests_are_read_with_a_filter():
+    seen = []
+    g = graph([{"value": [{"id": "g1"}], "@odata.nextLink": "https://graph.microsoft.com/v1.0/users?$skiptoken=z"},
+               {"value": [{"id": "g2"}]}], seen)
+    assert g.guests() == {"g1", "g2"}
+    assert seen[1].url.params["$filter"] == "userType eq 'Guest'"
+
+
+def test_guests_are_kept_when_allowed(kc, token):
+    sara = kc.add_user("sara")
+    admin = kc.add_user("junaid", roles={"admin"})
+    calls = []
+
+    class Graph:
+        def accounts(self):
+            return {"oid-junaid": True, "oid-sara": True}
+
+        def guests(self):
+            calls.append("guests")
+            return {"oid-sara"}
+
+    for allow in (True, False):
+        kc.users[sara]["enabled"] = True
+        with TestClient(build_app(kc, graph=Graph(), entra_tenant_id="t", entra_client_id="c",
+                                  entra_client_secret="s", entra_allow_guests=allow)) as c:
+            assert c.post("/v1/sync", headers=token(admin, roles=["admin", "employee"])).status_code == 200
+            c.app.state.run_entra()
+        assert kc.users[sara]["enabled"] is allow
+    assert calls == ["guests"]                    # Graph isn't even asked while guests are allowed
 
 def test_status_shows_whether_the_leavers_sync_is_on(app_client, token, staff):
     st = app_client.get("/v1/status", headers=token(staff["junaid"], roles=["admin", "employee"])).json()

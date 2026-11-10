@@ -32,6 +32,7 @@ class Settings:
     entra_client_id: str | None = None        # its sync app, with Microsoft Graph User.Read.All
     entra_client_secret: str | None = None
     entra_signin_app_id: str | None = None    # the sign-in app: members no longer assigned to it are disabled
+    entra_allow_guests: bool = False          # keep the Microsoft tenant's guests (other companies' people) enabled
     entra_sync_interval_seconds: int = 900
     entra_max_disable: int = 5                # more leavers than this in one run: change nothing, report it
 
@@ -81,6 +82,7 @@ class Settings:
             entra_client_id=env.get("ENTRA_SYNC_CLIENT_ID") or None,
             entra_client_secret=env.get("ENTRA_SYNC_CLIENT_SECRET") or None,
             entra_signin_app_id=env.get("ENTRA_SIGNIN_APP_ID") or None,
+            entra_allow_guests=env.get("ENTRA_ALLOW_GUESTS", "").lower() in ("1", "true", "yes"),
             entra_sync_interval_seconds=int(env.get("ENTRA_SYNC_INTERVAL_SECONDS", "900")),
             entra_max_disable=int(env.get("ENTRA_SYNC_MAX_DISABLE", "5")),
         )

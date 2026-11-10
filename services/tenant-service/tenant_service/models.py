@@ -51,7 +51,7 @@ class App(Base):
     __tablename__ = "apps"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    default_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_enabled: Mapped[bool] = mapped_column(Boolean, default=False)     # new members get it without asking
 
 
 class Member(Base):
