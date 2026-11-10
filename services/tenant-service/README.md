@@ -32,7 +32,7 @@ Rules:
 - **The last admin can't be removed or disabled,** and nobody can disable themselves.
 - **Disabling someone also ends their sessions.** So does making someone admin: they sign in again, and the realm
   asks for their one-time code before their tokens carry `admin`.
-- **Leavers are turned off automatically** when the leavers' sync is configured: every 15 minutes it reads the company's Microsoft users and disables, and signs out, every member whose Microsoft account is disabled or deleted, and with `ENTRA_SIGNIN_APP_ID` every member no longer assigned to the sign-in app. It never turns anyone back on, and changes nothing if more than `ENTRA_SYNC_MAX_DISABLE` would go at once (`tenant_service/entra.py`).
+- **Leavers are turned off automatically** when the leavers' sync is configured: every 15 minutes it reads the company's Microsoft users and disables, and signs out, every member whose Microsoft account is disabled or deleted, every guest from another organisation (unless `ENTRA_ALLOW_GUESTS=true`), and with `ENTRA_SIGNIN_APP_ID` every member no longer assigned to the sign-in app. It never turns anyone back on, and changes nothing if more than `ENTRA_SYNC_MAX_DISABLE` would go at once (`tenant_service/entra.py`).
 - **Every change is recorded** in the member's history, with who made it. The event is saved before Keycloak is changed and then marked `done` or `failed`, so a change that fails half way still shows who tried what. Invites are recorded under `invite:<invite id>`.
 - **A sync never empties the directory.** A Keycloak 404 on a listing is an error, not "nobody", and a sync that would remove more than `SYNC_MAX_REMOVE` members, or every member, changes nothing and shows why in `/v1/status`. If they really left, an admin runs `POST /v1/sync?allow_removals=true`.
 - **Several replicas can run.** Changes that touch admins take a Postgres advisory lock, so the last-admin rule holds when two admins act at once, and each sync runs on one replica at a time.
@@ -57,6 +57,7 @@ Answers to bad requests: 401 (no, invalid, expired or wrong-tenant token), 403 (
 | `TARAZ_AUTH_TOKEN_URL` | optional: where this service gets its own token. Defaults to `<KEYCLOAK_INTERNAL_URL or issuer base>/realms/<realm>/protocol/openid-connect/token` |
 | `ADMIN_CLIENTS` | optional: the apps admins may change members from. Default `app-shell` |
 | `ENTRA_TENANT_ID` · `ENTRA_SYNC_CLIENT_ID` · `ENTRA_SYNC_CLIENT_SECRET` | the leavers' sync: the customer's Microsoft tenant, and a sync app there with the Graph application permission `User.Read.All` (admin consent). Leave unset to turn the sync off |
+| `ENTRA_ALLOW_GUESTS` | optional: `true` keeps the Microsoft tenant's guests (userType Guest) enabled. By default the leavers' sync disables them |
 | `ENTRA_SIGNIN_APP_ID` | optional: the client id of the Entra app people sign in through (assignment required). Members no longer assigned to it are disabled. The sync app then also needs Graph `Application.Read.All` and `GroupMember.Read.All` |
 | `ENTRA_SYNC_INTERVAL_SECONDS` · `ENTRA_SYNC_MAX_DISABLE` | optional: `900` and `5` |
 | `TARAZ_AUTH_SKIP_AUDIENCE_CHECK` | `true` only until the realm has been applied with audiences (`keycloak/README.md`) |

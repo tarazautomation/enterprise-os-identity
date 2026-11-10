@@ -67,10 +67,12 @@ The realm changes put audiences and per-app roles in tokens. tenant-service then
 
 ## One-off admin changes: `admin-setup.py`
 
-An admin runs `python deploy/railway/admin-setup.py` on their own PC. It asks for the admin-console username, password and authenticator code (hidden, never saved), then:
+An admin runs `python deploy/railway/admin-setup.py` on their own PC. It asks for the admin-console username, password and authenticator code (the password and code are hidden; nothing is saved), then:
 1. removes the "Enterprise OS Admins group -> admin" rule (since 2026-10-21 the admin portal decides who is admin)
 2. gives `tenant-service`'s service account view-users, query-users, manage-users and view-realm in realm `taraz`
-3. issues a new `tenant-service` client secret and saves it to `tenant-service-secret.txt` for the Railway variable. Set `SECRET_OUT_DIR` to keep it outside the repo, and delete it afterwards.
+3. only with `--new-secret`: issues a new `tenant-service` client secret and saves it to `tenant-service-secret.txt` for the Railway variable. The old secret stops working at once, so update the variable straight away. Set `SECRET_OUT_DIR` to keep the file outside the repo, and delete it afterwards.
+
+Running it again is safe: steps 1 and 2 change nothing the second time. If a call fails, it stops and lists the steps already done. `scribe-setup.py` works the same way; both share `kc_admin.py`.
 
 ## Tenant service (P2.2)
 
@@ -82,13 +84,13 @@ Service `tenant-service` in the same project, built from this repo (`services/te
 | Pre-deploy command | `alembic upgrade head` (migrations run before each deploy, not at start-up) |
 | Healthcheck | `/healthz` |
 | Watch paths | `services/tenant-service/**`, `libs/taraz-auth/**` |
-| Variables | `RAILWAY_DOCKERFILE_PATH`, `DATABASE_URL` (reference to `Postgres-XjsC`), `TARAZ_AUTH_ISSUER`, `TARAZ_AUTH_TENANT_ID`, `TENANT_NAME`, `TARAZ_AUTH_CLIENT_ID` (`tenant-service`), `TARAZ_AUTH_CLIENT_SECRET` (issued by `admin-setup.py`), `SYNC_INTERVAL_SECONDS`, `PORT` |
+| Variables | `RAILWAY_DOCKERFILE_PATH`, `DATABASE_URL` (reference to `Postgres-XjsC`), `TARAZ_AUTH_ISSUER`, `TARAZ_AUTH_TENANT_ID`, `TENANT_NAME`, `TARAZ_AUTH_CLIENT_ID` (`tenant-service`), `TARAZ_AUTH_CLIENT_SECRET` (issued by `admin-setup.py --new-secret`), `SYNC_INTERVAL_SECONDS`, `PORT` |
 
 First deploy (2026-10-21): the migration ran, and the first sync found 1 user.
 
 ## Scribe's Keycloak sign-in (P2.7)
 
-Before Scribe staging or production is switched to `SIGN_IN=keycloak`, an admin runs `deploy/railway/scribe-setup.py` once on their own PC (it asks for the admin password and one-time code). It adds the `entra` client scope (Microsoft user ID and tenant ID in Scribe's tokens) and writes a fresh `scribe` client secret to `scribe-secret.txt`.
+Before Scribe staging or production is switched to `SIGN_IN=keycloak`, an admin runs `deploy/railway/scribe-setup.py` once on their own PC (it asks for the admin password and one-time code). It adds the `entra` client scope (Microsoft user ID and tenant ID in Scribe's tokens). With `--new-secret` it also writes a fresh `scribe` client secret to `scribe-secret.txt`; Scribe's sign-in then fails until `TARAZ_AUTH_CLIENT_SECRET` is updated.
 
 Scribe's variables (project "Scribe Minio", service `scribe`; staging deploys from branch `staging`, production from `main`):
 

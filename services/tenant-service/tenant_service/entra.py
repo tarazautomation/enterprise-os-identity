@@ -15,6 +15,9 @@ once (a wrong tenant or app, say).
 Needs an Entra app in the customer's tenant, separate from the sign-in app, with the Microsoft Graph application
 permission User.Read.All (admin consent): ENTRA_TENANT_ID, ENTRA_SYNC_CLIENT_ID, ENTRA_SYNC_CLIENT_SECRET. For the
 assignment check also Application.Read.All and GroupMember.Read.All.
+
+Guests in the Microsoft tenant (userType Guest: people from other companies invited into it) are disabled too,
+because they aren't the company's staff. ENTRA_ALLOW_GUESTS=true keeps them.
 """
 
 from dataclasses import dataclass, field
@@ -79,6 +82,12 @@ class GraphUsers:
         users = self._all(f"{self._graph}/users?$select=id,accountEnabled&$top=999", headers)
         return {u["id"]: bool(u.get("accountEnabled")) for u in users}
 
+    def guests(self) -> set[str]:
+        """The tenant's guest users: people from other organisations invited into it."""
+        headers = {"Authorization": f"Bearer {self._token()}"}
+        users = self._all(f"{self._graph}/users?$filter=userType%20eq%20'Guest'&$select=id&$top=999", headers)
+        return {u["id"] for u in users}
+
     def assigned(self, app_client_id: str) -> set[str]:
         """The users assigned to an app (its enterprise application), directly or as members of assigned groups."""
         headers = {"Authorization": f"Bearer {self._token()}"}
@@ -100,20 +109,22 @@ class LeaverResult:
     disabled: list[str] = field(default_factory=list)
 
 
-def _why_leaving(oid: str, accounts: dict[str, bool], assigned: set[str] | None) -> str | None:
+def _why_leaving(oid: str, accounts: dict[str, bool], assigned: set[str] | None, guests: set[str]) -> str | None:
     if oid not in accounts:
         return "deleted in Microsoft"
     if not accounts[oid]:
         return "disabled in Microsoft"
+    if oid in guests:
+        return "a guest in Microsoft, not one of the company's own accounts"
     if assigned is not None and oid not in assigned:
         return "no longer assigned to the sign-in app in Microsoft"
     return None
 
 
 def disable_leavers(session: Session, kc, tenant_id: str, accounts: dict[str, bool], max_disable: int,
-                    assigned: set[str] | None = None) -> LeaverResult:
-    """Disable, and sign out, every active member whose Microsoft account is disabled or gone, or (with
-    `assigned`, the users assigned to the sign-in app) who is no longer assigned to it."""
+                    assigned: set[str] | None = None, guests: set[str] | None = None) -> LeaverResult:
+    """Disable, and sign out, every active member whose Microsoft account is disabled or gone, who is a guest
+    (`guests`), or (with `assigned`, the users assigned to the sign-in app) who is no longer assigned to it."""
     if not accounts:
         raise EntraError("Microsoft Graph returned no users; nothing changed")
     if assigned is not None and not assigned:
@@ -121,7 +132,7 @@ def disable_leavers(session: Session, kc, tenant_id: str, accounts: dict[str, bo
                          "nothing changed")
     members = session.scalars(select(Member).where(Member.tenant_id == tenant_id, Member.status == "active",
                                                    Member.entra_oid.is_not(None))).all()
-    leavers = [(m, why) for m in members if (why := _why_leaving(m.entra_oid, accounts, assigned))]
+    leavers = [(m, why) for m in members if (why := _why_leaving(m.entra_oid, accounts, assigned, guests or set()))]
     if len(leavers) > max_disable:
         raise EntraError(f"{len(leavers)} members would be disabled, more than ENTRA_SYNC_MAX_DISABLE={max_disable}; "
                          "nothing changed")

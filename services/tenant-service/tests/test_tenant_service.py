@@ -104,6 +104,14 @@ def test_app_access_is_not_offered(app_client, token, people):
     assert "apps" not in app_client.get(f"/v1/members/{people['ali']}", headers=hdr).json()
 
 
+
+def test_new_members_start_with_no_apps(kc, app_client, token, people):
+    from tenant_service.models import Member
+    newbie = kc.add_user("newbie")
+    app_client.post("/v1/sync", headers=admin_hdr(token, people))
+    with app_client.app.state.session_factory() as s:
+        assert s.get(Member, newbie).apps == []          # an admin turns on what each person needs
+
 # --- who may change members ---
 
 def test_admin_changes_come_only_from_the_admin_portal(app_client, token, people):

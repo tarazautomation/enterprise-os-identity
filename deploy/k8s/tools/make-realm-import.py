@@ -4,7 +4,10 @@ The rendered realm holds $(env:KC_...) placeholders for keycloak-config-cli. Her
 ${KC_...} placeholder, mapped to the same-named key of the Secret "keycloak-realm-secrets" in the Keycloak
 namespace. Run again whenever the realm changes (after `python keycloak/render.py`):
 
-    python make-realm-import.py <keycloak/realm-taraz.json> <output realm-import.json>
+    python make-realm-import.py <keycloak/realm-taraz.json> <output realm-import.json> [--lab]
+
+--lab adds the localhost addresses the lab's apps use through port-forwards (LAB_REDIRECTS). The production realm
+has none, so a sign-in can't be sent to a program listening on someone's machine.
 
 Note: a realm import only CREATES a realm. If the realm already exists, it is left as is. Change existing realms
 with keycloak-config-cli (keycloak/README.md).
@@ -14,13 +17,22 @@ import re
 import sys
 
 SECRET_NAME = "keycloak-realm-secrets"
+LAB_REDIRECTS = {
+    "app-shell": ["http://localhost:3000/*", "http://localhost:5173/*"],
+    "knowledge-base": ["http://localhost:8000/*"],
+}
 PLACEHOLDER = re.compile(r"\$\(env:(KC_[A-Z0-9_]+)\)")
 
 
-def main(src: str, dst: str) -> None:
+def main(src: str, dst: str, lab: bool = False) -> None:
     text = open(src, encoding="utf-8").read()
     placeholders = sorted(set(PLACEHOLDER.findall(text)))
     realm = json.loads(PLACEHOLDER.sub(r"${\1}", text))
+    if lab:
+        for client in realm["clients"]:
+            extra = LAB_REDIRECTS.get(client["clientId"], [])
+            client["redirectUris"] = client.get("redirectUris", []) + [u for u in extra
+                                                                      if u not in client.get("redirectUris", [])]
     cr = {
         "apiVersion": "k8s.keycloak.org/v2beta1",
         "kind": "KeycloakRealmImport",
@@ -38,4 +50,5 @@ def main(src: str, dst: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    args = [a for a in sys.argv[1:] if a != "--lab"]
+    main(args[0], args[1], lab="--lab" in sys.argv[1:])

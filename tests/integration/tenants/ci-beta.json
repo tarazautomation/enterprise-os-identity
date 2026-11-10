@@ -2,6 +2,7 @@
   "realm": "ci-beta",
   "display_name": "CI Beta",
   "microsoft_first": false,
+  "lab": true,
   "entra": {
     "tenant_id": "00000000-0000-0000-0000-00000000000b",
     "client_id": "00000000-0000-0000-0000-0000000000b1"

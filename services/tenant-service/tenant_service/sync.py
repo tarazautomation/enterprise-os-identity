@@ -154,5 +154,5 @@ def seed(session: Session, tenant_id: str, tenant_name: str) -> None:
         session.add(Tenant(id=tenant_id, name=tenant_name))
     for app_id, name in APPS.items():
         if session.get(App, app_id) is None:
-            session.add(App(id=app_id, name=name, default_enabled=True))
+            session.add(App(id=app_id, name=name, default_enabled=False))
     session.commit()

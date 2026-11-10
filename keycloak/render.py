@@ -11,7 +11,8 @@ Inputs:
   tenants/<id>.json    one customer: realm name, its Microsoft (Entra) tenant and app, redirect addresses,
                        back-channel logout addresses, the name of the variable holding its Microsoft secret, and
                        client_copies: more clients made from one in the template, e.g. a staging copy of scribe
-                       with its own addresses (a client has one back-channel logout address)
+                       with its own addresses (a client has one back-channel logout address), and "lab": true
+                       for a test realm, the only kind allowed localhost addresses for its web apps
 
 No secret is in any of these files. Client secrets are left to Keycloak, which generates one per client, and the
 Microsoft secret is written as $(env:NAME) for keycloak-config-cli to fill in when it applies the realm.
@@ -28,6 +29,8 @@ HERE = Path(__file__).resolve().parent
 TOKEN = re.compile(r"\{\{([a-z_.:-]+)\}\}")
 REALM_NAME = re.compile(r"[a-z][a-z0-9-]{1,39}")
 SECRET_ENV = re.compile(r"KC_[A-Z0-9_]+")
+LOCAL = re.compile(r"(?i)^https?://(localhost|127\.0\.0\.1|\[::1\])([:/]|$)")
+DESKTOP_APPS = {"scribe-desktop"}      # a desktop app's sign-in returns to a port on the person's own machine
 
 
 def load(path) -> dict:
@@ -151,9 +154,24 @@ def microsoft_first(realm: dict, on: bool) -> None:
     realm.setdefault("authenticatorConfig", []).append({"alias": "microsoft-first", "config": {"defaultProvider": "entra"}})
 
 
+def check_addresses(tenant: dict) -> None:
+    """A real customer's web apps return only to their real addresses. On localhost, any program on the person's
+    machine could receive their sign-in, so localhost is for test realms ("lab": true) and desktop apps."""
+    if tenant.get("lab"):
+        return
+    for cid, uris in tenant["redirect_uris"].items():
+        local = [u for u in uris if LOCAL.match(u)]
+        if local and cid not in DESKTOP_APPS:
+            raise ValueError(f"{tenant['realm']}: {cid} may not return to {local[0]} (localhost is for lab realms)")
+        plain = [u for u in uris if u.lower().startswith("http://") and not LOCAL.match(u)]
+        if plain:
+            raise ValueError(f"{tenant['realm']}: {cid} returns to {plain[0]}; use https")
+
+
 def render(template: dict, tenant: dict, access: dict) -> dict:
     if not REALM_NAME.fullmatch(tenant["realm"]):
         raise ValueError(f"realm {tenant['realm']!r}: use lowercase letters, digits and dashes, starting with a letter")
+    check_addresses(tenant)
     template, access = copy.deepcopy(template), copy.deepcopy(access)
     add_copies(template, access, tenant.get("client_copies", {}))
     realm = fill(template, tenant)

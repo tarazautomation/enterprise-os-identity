@@ -3,6 +3,6 @@ kind: Kustomization
 namespace: identity
 resources:
   - keycloak.yaml
-  # Generated from keycloak/realm-taraz.json by tools/make-realm-import.py.
+  # Generated from keycloak/realm-taraz.json by tools/make-realm-import.py --lab (adds the port-forward addresses).
   # Needs Secret keycloak-realm-secrets (one key per ${KC_*} placeholder) before it runs.
   - realm-import.json

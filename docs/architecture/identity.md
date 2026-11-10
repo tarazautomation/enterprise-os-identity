@@ -168,7 +168,7 @@ The realm files contain no secrets and no signing keys. Keycloak generates keys 
 
 ## Leavers (decided 2026-11-03)
 
-Microsoft doesn't tell Keycloak when someone leaves. tenant-service's leavers' sync reads the company's Microsoft users through Microsoft Graph every 15 minutes and disables, and signs out, every member whose Microsoft account is disabled or deleted. With `ENTRA_SIGNIN_APP_ID` set (the sign-in app, with assignment required), it also disables members who are no longer assigned to that app, directly or through a group. Scribe's desktops, which run on Scribe's own device tokens, ask tenant-service at each refresh whether the person is still an active member (Scribe's `TENANT_SERVICE_URL`).
+Microsoft doesn't tell Keycloak when someone leaves. tenant-service's leavers' sync reads the company's Microsoft users through Microsoft Graph every 15 minutes and disables, and signs out, every member whose Microsoft account is disabled or deleted, and every guest from another organisation (`ENTRA_ALLOW_GUESTS=true` keeps guests). New members start with no apps: an admin turns on what each person needs. With `ENTRA_SIGNIN_APP_ID` set (the sign-in app, with assignment required), it also disables members who are no longer assigned to that app, directly or through a group. Scribe's desktops, which run on Scribe's own device tokens, ask tenant-service at each refresh whether the person is still an active member (Scribe's `TENANT_SERVICE_URL`).
 
 Each customer needs a second Entra app for it, with the Graph application permission `User.Read.All` and admin consent (tenant-service README, settings).
 

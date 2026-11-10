@@ -94,7 +94,7 @@ def kc():
     return FakeKeycloak()
 
 
-def build_app(kc, database_url="sqlite://", **settings):
+def build_app(kc, database_url="sqlite://", graph=None, **settings):
     """The real app on a test database, with the fake Keycloak and keys of its own."""
     settings = Settings(issuer=ISSUER, tenant_id="taraz", tenant_name="Taraz Technologies", client_id="tenant-service",
                         client_secret="x", database_url=database_url, **settings)
@@ -102,7 +102,7 @@ def build_app(kc, database_url="sqlite://", **settings):
     Base.metadata.create_all(engine)
     verifier = TokenVerifier(ISSUER, "taraz", audience="tenant-service")
     verifier._keys.fetch_data = _jwks
-    return create_app(settings, kc=kc, verifier=verifier, engine=engine, run_sync_loop=False)
+    return create_app(settings, kc=kc, verifier=verifier, engine=engine, run_sync_loop=False, graph=graph)
 
 
 @pytest.fixture

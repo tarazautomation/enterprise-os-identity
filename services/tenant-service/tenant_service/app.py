@@ -86,8 +86,9 @@ def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = 
                 return None
             with SessionLocal() as s:
                 assigned = graph.assigned(settings.entra_signin_app_id) if settings.entra_signin_app_id else None
+                guests = None if settings.entra_allow_guests else graph.guests()
                 res = disable_leavers(s, get_kc(), settings.tenant_id, graph.accounts(), settings.entra_max_disable,
-                                      assigned)
+                                      assigned, guests)
         state.update(entra_at=res.at, entra_ok=True, entra_error=None)
         return res
 
@@ -127,6 +128,7 @@ def create_app(settings: Settings, *, kc=None, verifier: TokenVerifier | None = 
     app.include_router(build_router(auth, get_session, get_kc, settings.tenant_id, state, settings.admin_clients,
                                     locks, settings.sync_max_remove))
     app.state.session_factory = SessionLocal
+    app.state.run_entra = run_entra           # one leavers' sync run, for tests and operators
 
     async def keycloak_error(_, exc: Exception):
         # The detail (Keycloak's answer, an address) goes to the log, not to the caller
