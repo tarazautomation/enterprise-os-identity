@@ -20,7 +20,11 @@
     "scribe": "https://web-production-ca083.up.railway.app/auth/keycloak/backchannel-logout",
     "scribe-staging": "https://scribe-staging.up.railway.app/auth/keycloak/backchannel-logout"
   },
+  "google": {
+    "client_id": "924547405035-mmm9pd9tcp138950p85he1v85pai2nt0.apps.googleusercontent.com"
+  },
   "secrets": {
-    "entra": "KC_ENTRA_CLIENT_SECRET"
+    "entra": "KC_ENTRA_CLIENT_SECRET",
+    "google": "KC_GOOGLE_CLIENT_SECRET"
   }
 }
