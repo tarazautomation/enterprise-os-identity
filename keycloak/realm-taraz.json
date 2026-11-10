@@ -2084,6 +2084,33 @@
         "passMaxAge": "false",
         "disableTypeClaimCheck": "false"
       }
+    },
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "hideOnLogin": false,
+      "firstBrokerLoginFlowAlias": "first-google-sign-in",
+      "postBrokerLoginFlowAlias": "after-microsoft-sign-in",
+      "config": {
+        "clientId": "924547405035-mmm9pd9tcp138950p85he1v85pai2nt0.apps.googleusercontent.com",
+        "clientSecret": "$(env:KC_GOOGLE_CLIENT_SECRET)",
+        "defaultScope": "openid profile email",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256",
+        "syncMode": "IMPORT",
+        "acceptsPromptNoneForwardFromClient": "false",
+        "offlineAccess": "false",
+        "userIp": "false",
+        "filteredByClaim": "false",
+        "guiOrder": "2"
+      }
     }
   ],
   "identityProviderMappers": [
@@ -2115,6 +2142,16 @@
         "syncMode": "INHERIT",
         "claim": "tid",
         "user.attribute": "entra_tid"
+      }
+    },
+    {
+      "name": "tenant_id = taraz",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "hardcoded-attribute-idp-mapper",
+      "config": {
+        "syncMode": "INHERIT",
+        "attribute.value": "taraz",
+        "attribute": "tenant_id"
       }
     }
   ],
@@ -2936,6 +2973,83 @@
           "priority": 10,
           "autheticatorFlow": false,
           "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "first-google-sign-in",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "description": "A first Google sign-in: a new account, or Google linked to an existing one once the person has signed in to it",
+      "authenticationExecutions": [
+        {
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "idp-review-profile",
+          "authenticatorConfig": "review profile config"
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false,
+          "flowAlias": "google: new or existing account"
+        }
+      ]
+    },
+    {
+      "alias": "google: new or existing account",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "description": "A new account if the email is free, otherwise prove it's yours",
+      "authenticationExecutions": [
+        {
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "idp-create-user-if-unique",
+          "authenticatorConfig": "create unique user config"
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false,
+          "flowAlias": "google: prove the existing account is yours"
+        }
+      ]
+    },
+    {
+      "alias": "google: prove the existing account is yours",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "description": "Confirm, then sign in to the existing account (Microsoft); no linking on email alone",
+      "authenticationExecutions": [
+        {
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "idp-confirm-link"
+        },
+        {
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "idp-username-password-form"
         }
       ]
     }

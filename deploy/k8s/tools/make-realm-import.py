@@ -7,7 +7,8 @@ namespace. Run again whenever the realm changes (after `python keycloak/render.p
     python make-realm-import.py <keycloak/realm-taraz.json> <output realm-import.json> [--lab]
 
 --lab adds the localhost addresses the lab's apps use through port-forwards (LAB_REDIRECTS). The production realm
-has none, so a sign-in can't be sent to a program listening on someone's machine.
+has none, so a sign-in can't be sent to a program listening on someone's machine. It also leaves out Google sign-in:
+Google returns people only to the addresses registered with it, and the lab's isn't one.
 
 Note: a realm import only CREATES a realm. If the realm already exists, it is left as is. Change existing realms
 with keycloak-config-cli (keycloak/README.md).
@@ -25,14 +26,18 @@ PLACEHOLDER = re.compile(r"\$\(env:(KC_[A-Z0-9_]+)\)")
 
 
 def main(src: str, dst: str, lab: bool = False) -> None:
-    text = open(src, encoding="utf-8").read()
-    placeholders = sorted(set(PLACEHOLDER.findall(text)))
-    realm = json.loads(PLACEHOLDER.sub(r"${\1}", text))
+    realm = json.loads(open(src, encoding="utf-8").read())
     if lab:
         for client in realm["clients"]:
             extra = LAB_REDIRECTS.get(client["clientId"], [])
             client["redirectUris"] = client.get("redirectUris", []) + [u for u in extra
                                                                       if u not in client.get("redirectUris", [])]
+        realm["identityProviders"] = [i for i in realm["identityProviders"] if i["alias"] != "google"]
+        realm["identityProviderMappers"] = [m for m in realm["identityProviderMappers"]
+                                            if m["identityProviderAlias"] != "google"]
+    text = json.dumps(realm)
+    placeholders = sorted(set(PLACEHOLDER.findall(text)))
+    realm = json.loads(PLACEHOLDER.sub(r"${\1}", text))
     cr = {
         "apiVersion": "k8s.keycloak.org/v2beta1",
         "kind": "KeycloakRealmImport",

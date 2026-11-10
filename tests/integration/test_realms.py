@@ -263,6 +263,8 @@ def test_google_sign_in_is_offered_with_microsoft(admin):
     mappers = admin.get(f"/{B}/identity-provider/instances/google/mappers").json()
     assert {m["config"].get("attribute") for m in mappers} == {"tenant_id"}  # tokens carry the tenant
     assert admin.get(f"/{A}/identity-provider/instances/google").status_code == 404
+    taraz = admin.get("/taraz/identity-provider/instances/google").json()        # Taraz offers it too
+    assert taraz["config"]["clientId"].endswith(".apps.googleusercontent.com") and taraz["trustEmail"] is False
 
 
 def test_an_app_sends_people_to_google_with_a_hint():
